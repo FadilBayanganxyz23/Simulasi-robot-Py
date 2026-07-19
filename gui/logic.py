@@ -36,6 +36,7 @@ class SequenceManager:
         self.robot_navigating = False
         self.robot_balancing  = False   # True saat balance state machine aktif di simulator
         self.line_sensors     = {"left": 0, "right": 0}
+        self.line_latch       = False
         self.active_step_info = {
             "status": "IDLE",
             "kombinasi": "-",
@@ -122,8 +123,12 @@ class SequenceManager:
                         
                         # Kolom 9 & 10: line_l, line_r (0 atau 1)
                         if len(parts) >= 10:
-                            self.line_sensors["left"]  = int(parts[8])
-                            self.line_sensors["right"] = int(parts[9])
+                            l_val = int(parts[8])
+                            r_val = int(parts[9])
+                            self.line_sensors["left"]  = l_val
+                            self.line_sensors["right"] = r_val
+                            if l_val == 1 or r_val == 1:
+                                self.line_latch = True
                         else:
                             self.line_sensors["left"]  = 0
                             self.line_sensors["right"] = 0
@@ -221,6 +226,7 @@ class SequenceManager:
 
                     # ---- PWM Command (Maju/Mundur & Geser K/K, batas Sensor Garis) ----
                     if "pwm" in nama_lower:
+                        self.line_latch = False  # Reset latch
                         send_vx = float(gerak["vx"])
                         send_vy = float(gerak["vy"])
                         send_vw = float(gerak["vw"]) if gerak.get("vw") is not None else 0.0
@@ -234,8 +240,8 @@ class SequenceManager:
 
                         while self.running_sequence:
                             time.sleep(0.01)
-                            # Logika salah satu sensor garis aktif (bernilai 1)
-                            has_line = (self.line_sensors["left"] == 1 or self.line_sensors["right"] == 1)
+                            # Logika salah satu sensor garis aktif (bernilai 1) atau latch aktif
+                            has_line = self.line_latch or (self.line_sensors["left"] == 1 or self.line_sensors["right"] == 1)
                             self.active_step_info["current_val"] = 1.0 if has_line else 0.0
 
                             if has_line:
@@ -405,6 +411,7 @@ class SequenceManager:
                     accumulated_angle = 0.0
                     last_angle = self.robot_pos["angle"]
 
+                    self.line_latch = False  # Reset latch
                     while self.running_sequence:
                         time.sleep(0.01)
                         if limit_type == "Waktu (s)":
@@ -429,7 +436,7 @@ class SequenceManager:
                             if accumulated_angle >= limit_val:
                                 break
                         elif limit_type == "Sensor Garis":
-                            has_line = (self.line_sensors["left"] == 1 or self.line_sensors["right"] == 1)
+                            has_line = self.line_latch or (self.line_sensors["left"] == 1 or self.line_sensors["right"] == 1)
                             self.active_step_info["current_val"] = 1.0 if has_line else 0.0
                             if has_line:
                                 break

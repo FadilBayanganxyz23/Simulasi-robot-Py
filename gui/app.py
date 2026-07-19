@@ -29,7 +29,7 @@ class SequenceGUI:
     def __init__(self, root):
         self.root = root
         self.root.title("Robot Movement Sequence System - Controller GUI")
-        self.root.geometry("1150x650")
+        self.root.geometry("1300x680")
 
         # Inisialisasi manajer logika & komunikasi
         self.manager = SequenceManager(self)
@@ -40,7 +40,7 @@ class SequenceGUI:
         self.bg_image_path = "gui_background.jpg"
         if os.path.exists(self.bg_image_path):
             self.bg_img = Image.open(self.bg_image_path)
-            self.bg_photo = ImageTk.PhotoImage(self.bg_img.resize((1150, 650), Image.Resampling.LANCZOS))
+            self.bg_photo = ImageTk.PhotoImage(self.bg_img.resize((1300, 680), Image.Resampling.LANCZOS))
             self.bg_label = tk.Label(self.root, image=self.bg_photo)
             self.bg_label.place(x=0, y=0, relwidth=1, relheight=1)
             
@@ -149,12 +149,14 @@ class SequenceGUI:
         self.entry_combo_name.insert(0, "Kombinasi_Kustom")
         self.entry_combo_name.grid(row=0, column=1, sticky="w", padx=5, pady=5)
 
-        ttk.Label(frame, text="Langkah Baru", font=("Segoe UI", 10, "bold")).grid(
-            row=1, column=0, columnspan=2, pady=10)
+        # Sub-frame for compact inputs
+        inputs_frame = ttk.Frame(frame)
+        inputs_frame.grid(row=1, column=0, columnspan=2, sticky="ew", padx=5, pady=5)
 
-        ttk.Label(frame, text="Nama Gerakan:").grid(row=2, column=0, sticky="w", padx=5, pady=3)
+        # Row 0: Nama Gerakan
+        ttk.Label(inputs_frame, text="Nama:").grid(row=0, column=0, sticky="w", padx=2, pady=2)
         self.entry_step_name = ttk.Combobox(
-            frame, values=[
+            inputs_frame, values=[
                 "local odometry",
                 "global odometry",
                 "pwm",
@@ -163,44 +165,47 @@ class SequenceGUI:
                 "reset coordinate",
                 "balance belakang kiri"
             ],
-            width=18
+            width=15
         )
         self.entry_step_name.set("local odometry")
-        self.entry_step_name.grid(row=2, column=1, sticky="w", padx=5, pady=3)
+        self.entry_step_name.grid(row=0, column=1, columnspan=5, sticky="ew", padx=2, pady=2)
 
-        ttk.Label(frame, text="Vx (Maju/Mundur):").grid(row=3, column=0, sticky="w", padx=5, pady=3)
-        self.spin_vx = ttk.Spinbox(frame, from_=-20, to=20, width=8)
+        # Row 1: Vx, Vy, Vw side-by-side
+        ttk.Label(inputs_frame, text="Vx:").grid(row=1, column=0, sticky="w", padx=2, pady=2)
+        self.spin_vx = ttk.Spinbox(inputs_frame, from_=-20, to=20, width=5)
         self.spin_vx.set(10)
-        self.spin_vx.grid(row=3, column=1, sticky="w", padx=5, pady=3)
+        self.spin_vx.grid(row=1, column=1, sticky="w", padx=2, pady=2)
 
-        ttk.Label(frame, text="Vy (Geser Kanan/Kiri):").grid(row=4, column=0, sticky="w", padx=5, pady=3)
-        self.spin_vy = ttk.Spinbox(frame, from_=-20, to=20, width=8)
+        ttk.Label(inputs_frame, text="Vy:").grid(row=1, column=2, sticky="w", padx=2, pady=2)
+        self.spin_vy = ttk.Spinbox(inputs_frame, from_=-20, to=20, width=5)
         self.spin_vy.set(0)
-        self.spin_vy.grid(row=4, column=1, sticky="w", padx=5, pady=3)
+        self.spin_vy.grid(row=1, column=3, sticky="w", padx=2, pady=2)
 
-        ttk.Label(frame, text="Vw (Putar):").grid(row=5, column=0, sticky="w", padx=5, pady=3)
-        self.spin_vw = ttk.Spinbox(frame, from_=-15, to=15, width=8)
-        self.spin_vw.grid(row=5, column=1, sticky="w", padx=5, pady=3)
+        ttk.Label(inputs_frame, text="Vw:").grid(row=1, column=4, sticky="w", padx=2, pady=2)
+        self.spin_vw = ttk.Spinbox(inputs_frame, from_=-15, to=15, width=5)
+        self.spin_vw.grid(row=1, column=5, sticky="w", padx=2, pady=2)
 
-        ttk.Label(frame, text="Tipe Limit:").grid(row=6, column=0, sticky="w", padx=5, pady=3)
+        # Row 2: Limit Type, Limit Val
+        ttk.Label(inputs_frame, text="Limit:").grid(row=2, column=0, sticky="w", padx=2, pady=2)
         self.combo_limit_type = ttk.Combobox(
-            frame, values=["Waktu (s)", "Jarak (px)", "Sudut (°)", "Sensor Garis"],
-            state="readonly", width=12
+            inputs_frame, values=["Waktu (s)", "Jarak (px)", "Sudut (°)", "Sensor Garis"],
+            state="readonly", width=10
         )
         self.combo_limit_type.current(0)
-        self.combo_limit_type.grid(row=6, column=1, sticky="w", padx=5, pady=3)
+        self.combo_limit_type.grid(row=2, column=1, columnspan=2, sticky="ew", padx=2, pady=2)
 
-        ttk.Label(frame, text="Nilai Limit:").grid(row=7, column=0, sticky="w", padx=5, pady=3)
-        self.entry_limit_val = ttk.Entry(frame, width=10)
+        ttk.Label(inputs_frame, text="Nilai:").grid(row=2, column=3, sticky="w", padx=2, pady=2)
+        self.entry_limit_val = ttk.Entry(inputs_frame, width=6)
         self.entry_limit_val.insert(0, "2.0")
-        self.entry_limit_val.grid(row=7, column=1, sticky="w", padx=5, pady=3)
+        self.entry_limit_val.grid(row=2, column=4, columnspan=2, sticky="ew", padx=2, pady=2)
 
-        ttk.Label(frame, text="Keterangan:").grid(row=8, column=0, sticky="w", padx=5, pady=3)
-        self.entry_step_desc = ttk.Entry(frame, width=15)
-        self.entry_step_desc.grid(row=8, column=1, sticky="w", padx=5, pady=3)
+        # Row 3: Keterangan
+        ttk.Label(inputs_frame, text="Ket:").grid(row=3, column=0, sticky="w", padx=2, pady=2)
+        self.entry_step_desc = ttk.Entry(inputs_frame, width=15)
+        self.entry_step_desc.grid(row=3, column=1, columnspan=5, sticky="ew", padx=2, pady=2)
 
         btn_add_frame = ttk.Frame(frame)
-        btn_add_frame.grid(row=9, column=0, columnspan=2, pady=10, padx=5, sticky="ew")
+        btn_add_frame.grid(row=2, column=0, columnspan=2, pady=5, padx=5, sticky="ew")
 
         self.btn_add_step = ttk.Button(
             btn_add_frame, text="➕ Tambah Langkah", command=self._add_step_to_draft
@@ -213,11 +218,11 @@ class SequenceGUI:
         self.btn_cancel_edit.pack(side="right", fill="x", expand=True, padx=2)
 
         ttk.Label(frame, text="Draft Gerakan Saat Ini:").grid(
-            row=10, column=0, columnspan=2, sticky="w", padx=5)
+            row=3, column=0, columnspan=2, sticky="w", padx=5)
 
         self.tree_draft = ttk.Treeview(
             frame, columns=("nama", "vx_vy", "limit", "keterangan"),
-            show="headings", height=5
+            show="headings", height=3
         )
         self.tree_draft.heading("nama",       text="Nama")
         self.tree_draft.heading("vx_vy",      text="Vx/Vy/Vw")
@@ -227,11 +232,11 @@ class SequenceGUI:
         self.tree_draft.column("vx_vy",      width=70, anchor="center")
         self.tree_draft.column("limit",      width=70, anchor="center")
         self.tree_draft.column("keterangan", width=90, anchor="w")
-        self.tree_draft.grid(row=11, column=0, columnspan=2, padx=5, pady=5, sticky="nsew")
+        self.tree_draft.grid(row=4, column=0, columnspan=2, padx=5, pady=5, sticky="nsew")
         self.tree_draft.bind("<Double-1>", self._on_draft_double_click)
 
         btn_row = ttk.Frame(frame)
-        btn_row.grid(row=12, column=0, columnspan=2, pady=5, sticky="ew")
+        btn_row.grid(row=5, column=0, columnspan=2, pady=5, sticky="ew")
 
         ttk.Button(btn_row, text="✏️ Edit",
                    command=self._load_step_for_editing).pack(side="left", fill="x", expand=True, padx=2)
@@ -242,7 +247,7 @@ class SequenceGUI:
 
         ttk.Button(frame, text="💾 Simpan Preset Kombinasi",
                    command=self._save_draft).grid(
-            row=13, column=0, columnspan=2, pady=10, padx=5, sticky="ew")
+            row=6, column=0, columnspan=2, pady=5, padx=5, sticky="ew")
 
     def _build_notes_frame(self, parent):
         """Frame catatan/memo pengguna yang tersimpan otomatis."""
@@ -250,7 +255,7 @@ class SequenceGUI:
         frame.pack(side="top", fill="both", expand=True, padx=10, pady=10)
 
         # Gunakan Text widget dengan background gelap agar matching dengan tema dashboard
-        self.txt_notes = tk.Text(frame, height=6, font=("Consolas", 10),
+        self.txt_notes = tk.Text(frame, height=3, font=("Consolas", 10),
                                   bg="#221f2d", fg="#ffffff", insertbackground="white",
                                   relief="flat", padx=8, pady=8)
         self.txt_notes.pack(fill="both", expand=True, padx=5, pady=5)
@@ -287,7 +292,6 @@ class SequenceGUI:
         self._build_telemetry_frame(self.right_panel)
         self._build_status_frame(self.right_panel)
         self._build_queue_panels(self.right_panel)
-        self._build_control_bar(self.right_panel)
     def _build_status_frame(self, parent):
         frame = ttk.LabelFrame(parent, text=" 🏃 Sequence Execution Monitor ")
         frame.pack(fill="x", padx=10, pady=5)
@@ -303,21 +307,31 @@ class SequenceGUI:
     def _build_selector_frame(self, parent):
         frame = ttk.LabelFrame(parent, text=" Pilih Variabel Kombinasi Gerakan ")
         frame.pack(fill="x", padx=5, pady=5)
-        ttk.Label(frame, text="Kombinasi:").pack(side="left", padx=5, pady=5)
+
+        # Row 1: Dropdown selection + Add button
+        row1 = ttk.Frame(frame)
+        row1.pack(fill="x", padx=5, pady=2)
+        ttk.Label(row1, text="Kombinasi:").pack(side="left", padx=5, pady=2)
+        
         self.var_combo = tk.StringVar()
         self.dropdown_kombinasi = ttk.Combobox(
-            frame, textvariable=self.var_combo,
+            row1, textvariable=self.var_combo,
             values=list(self.manager.kombinasi_gerakan.keys()),
-            state="readonly"
+            state="readonly", width=25
         )
-        self.dropdown_kombinasi.pack(side="left", padx=5, pady=5)
+        self.dropdown_kombinasi.pack(side="left", padx=5, pady=2)
         if self.manager.kombinasi_gerakan:
             self.dropdown_kombinasi.current(0)
 
-        ttk.Button(frame, text="➕ Tambah ke Urutan", command=self._add_to_queue).pack(side="left", padx=5)
-        ttk.Button(frame, text="✏️ Edit Preset",       command=self._load_preset_to_draft).pack(side="left", padx=5)
-        ttk.Button(frame, text="🗑️ Hapus Preset",      command=self._delete_preset).pack(side="left", padx=5)
-        ttk.Button(frame, text="🔄 Reload JSON",        command=self._reload_presets).pack(side="left", padx=5)
+        ttk.Button(row1, text="➕ Tambah ke Urutan", command=self._add_to_queue).pack(side="left", padx=5)
+
+        # Row 2: Preset actions
+        row2 = ttk.Frame(frame)
+        row2.pack(fill="x", padx=5, pady=2)
+        
+        ttk.Button(row2, text="✏️ Edit Preset",       command=self._load_preset_to_draft).pack(side="left", padx=5)
+        ttk.Button(row2, text="🗑️ Hapus Preset",      command=self._delete_preset).pack(side="left", padx=5)
+        ttk.Button(row2, text="🔄 Reload JSON",        command=self._reload_presets).pack(side="left", padx=5)
 
     def _build_telemetry_frame(self, parent):
         frame = ttk.LabelFrame(parent, text=" 📡 Live Telemetry & Odometry Dashboard ")
@@ -358,6 +372,13 @@ class SequenceGUI:
         frame_kiri = ttk.LabelFrame(paned, text=" Urutan Antrean Kombinasi ")
         paned.add(frame_kiri, weight=1)
 
+        # Button frame at the bottom of frame_kiri
+        kiri_btn_frame = ttk.Frame(frame_kiri)
+        kiri_btn_frame.pack(side="bottom", fill="x", padx=5, pady=5)
+        
+        ttk.Button(kiri_btn_frame, text="➖ Hapus Pilihan", command=self._delete_selected_macro).pack(side="left", padx=2, expand=True, fill="x")
+        ttk.Button(kiri_btn_frame, text="🗑 Clear Semua", command=self._clear_sequence).pack(side="right", padx=2, expand=True, fill="x")
+
         self.tree_kiri = ttk.Treeview(
             frame_kiri, columns=("no", "kombinasi"), show="headings"
         )
@@ -371,6 +392,19 @@ class SequenceGUI:
         # Kanan: detail langkah
         frame_kanan = ttk.LabelFrame(paned, text=" Detail Isi Gerakan ")
         paned.add(frame_kanan, weight=2)
+
+        # Button frame at the bottom of frame_kanan
+        kanan_btn_frame = ttk.Frame(frame_kanan)
+        kanan_btn_frame.pack(side="bottom", fill="x", padx=5, pady=5)
+
+        ttk.Button(kanan_btn_frame, text="🔄 Reset Robot", command=self.manager.reset_robot_position).pack(side="left", padx=2)
+        ttk.Button(kanan_btn_frame, text="🛑 Stop Sekuens", command=self.manager.stop_execution).pack(side="left", padx=2)
+        
+        self.btn_run_from = ttk.Button(kanan_btn_frame, text="⏭️ Mulai dari Pilihan", command=self._start_execution_from)
+        self.btn_run_from.pack(side="right", padx=2)
+        
+        self.btn_run = ttk.Button(kanan_btn_frame, text="▶ Jalankan Semua Sekuens", command=self._start_execution)
+        self.btn_run.pack(side="right", padx=2)
 
         cols = ("step", "nama", "vx", "vy", "vw", "limit_type", "limit_val", "keterangan")
         self.tree_kanan = ttk.Treeview(frame_kanan, columns=cols, show="headings")
@@ -388,26 +422,7 @@ class SequenceGUI:
             self.tree_kanan.column(col, width=w,
                                    anchor="center" if col != "nama" else "w")
         self.tree_kanan.pack(fill="both", expand=True, padx=5, pady=5)
-    def _build_control_bar(self, parent):
-        frame = ttk.Frame(parent)
-        frame.pack(fill="x", padx=5, pady=5)
 
-        self.btn_run = ttk.Button(frame, text="▶ Jalankan Semua Sekuens",
-                                   command=self._start_execution)
-        self.btn_run.pack(side="right", padx=5)
-
-        self.btn_run_from = ttk.Button(frame, text="⏭️ Mulai dari Pilihan",
-                                        command=self._start_execution_from)
-        self.btn_run_from.pack(side="right", padx=5)
-
-        ttk.Button(frame, text="🛑 Stop Sekuens",
-                   command=self.manager.stop_execution).pack(side="right", padx=5)
-        ttk.Button(frame, text="🔄 Reset Robot",
-                   command=self.manager.reset_robot_position).pack(side="right", padx=5)
-        ttk.Button(frame, text="➖ Hapus Pilihan",
-                   command=self._delete_selected_macro).pack(side="left", padx=5)
-        ttk.Button(frame, text="🗑 Clear Semua",
-                   command=self._clear_sequence).pack(side="left", padx=5)
 
     # ------------------------------------------------------------------
     # Polling Telemetri (dipanggil via after())
