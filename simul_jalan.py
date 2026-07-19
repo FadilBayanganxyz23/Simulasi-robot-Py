@@ -217,6 +217,51 @@ client_socket = None
 client_buffer = ""
 is_vel_local = False
 
+# Inisialisasi 15 Stand / Slider Box
+stands = []
+ox_st = FIELD_OFFSET_X
+oy_st = FIELD_OFFSET_Y
+
+# 1. Horizontal Group 1: ox+750, y in [280, 430, 580]
+for y in [280, 430, 580]:
+    stands.append({
+        "type": "H", "x": ox_st + 750, "y": oy_st + y,
+        "rect": pygame.Rect(ox_st + 750, oy_st + y - 40, 250, 80),
+        "color": None
+    })
+
+# 2. Horizontal Group 2: ox+1720, y in [280, 430, 580]
+for y in [280, 430, 580]:
+    stands.append({
+        "type": "H", "x": ox_st + 1720, "y": oy_st + y,
+        "rect": pygame.Rect(ox_st + 1720, oy_st + y - 40, 250, 80),
+        "color": None
+    })
+
+# 3. Horizontal Group 3: ox+500, y in [1330, 1480, 1630]
+for y in [1330, 1480, 1630]:
+    stands.append({
+        "type": "H", "x": ox_st + 500, "y": oy_st + y,
+        "rect": pygame.Rect(ox_st + 500, oy_st + y - 40, 250, 80),
+        "color": None
+    })
+
+# 4. Horizontal Group 4: ox+30, y in [3420, 3570, 3720]
+for y in [3420, 3570, 3720]:
+    stands.append({
+        "type": "H", "x": ox_st + 30, "y": oy_st + y,
+        "rect": pygame.Rect(ox_st + 30, oy_st + y - 40, 250, 80),
+        "color": None
+    })
+
+# 5. Vertical Group: x in [1100, 1400, 1700], y = oy + 3760
+for x in [1100, 1400, 1700]:
+    stands.append({
+        "type": "V", "x": ox_st + x, "y": oy_st + 3760,
+        "rect": pygame.Rect(ox_st + x - 40, oy_st + 3760, 80, 210),
+        "color": None
+    })
+
 # ---------------------------------------------------------------------------
 # Main Loop
 # ---------------------------------------------------------------------------
@@ -375,38 +420,56 @@ while running:
                     orig_mx = (mx - offset_x) / SCALE
                     orig_my = my / SCALE
 
-                    if active_tool == "TELEPORT":
-                        if not robot.check_collision(int(orig_mx), int(orig_my), robot.angle, raw_lapangan):
-                            robot.orig_x = int(orig_mx)
-                            robot.orig_y = int(orig_my)
-                    elif active_tool == "DRAW":
-                        is_drawing = True
-                        current_stroke = [(orig_mx, orig_my)]
-                        scribbles.append(current_stroke)
-                    elif active_tool == "LABEL":
-                        import tkinter as tk
-                        from tkinter import simpledialog
-                        root = tk.Tk()
-                        root.withdraw()
-                        root.attributes("-topmost", True)
-                        text = simpledialog.askstring("Beri Label", "Masukkan teks label:", parent=root)
-                        root.destroy()
-                        if text and text.strip():
-                            labels.append({"x": orig_mx, "y": orig_my, "text": text.strip()})
-                    elif active_tool == "ERASE":
-                        # Hapus label dekat klik
-                        labels = [lbl for lbl in labels if math.hypot(lbl["x"] - orig_mx, lbl["y"] - orig_my) > 30]
-                        # Hapus stroke coretan dekat klik
-                        new_scribbles = []
-                        for stroke in scribbles:
-                            keep = True
-                            for pt in stroke:
-                                if math.hypot(pt[0] - orig_mx, pt[1] - orig_my) < 20:
-                                    keep = False
-                                    break
-                            if keep:
-                                new_scribbles.append(stroke)
-                        scribbles = new_scribbles
+                    # Cek apakah klik mengenai salah satu stand (slider box)
+                    clicked_stand = None
+                    for s in stands:
+                        if s["rect"].collidepoint(orig_mx, orig_my):
+                            clicked_stand = s
+                            break
+
+                    if clicked_stand:
+                        # Cycle color: None -> RED -> GREEN -> BLUE -> None
+                        if clicked_stand["color"] is None:
+                            clicked_stand["color"] = "RED"
+                        elif clicked_stand["color"] == "RED":
+                            clicked_stand["color"] = "GREEN"
+                        elif clicked_stand["color"] == "GREEN":
+                            clicked_stand["color"] = "BLUE"
+                        else:
+                            clicked_stand["color"] = None
+                    else:
+                        if active_tool == "TELEPORT":
+                            if not robot.check_collision(int(orig_mx), int(orig_my), robot.angle, raw_lapangan):
+                                robot.orig_x = int(orig_mx)
+                                robot.orig_y = int(orig_my)
+                        elif active_tool == "DRAW":
+                            is_drawing = True
+                            current_stroke = [(orig_mx, orig_my)]
+                            scribbles.append(current_stroke)
+                        elif active_tool == "LABEL":
+                            import tkinter as tk
+                            from tkinter import simpledialog
+                            root = tk.Tk()
+                            root.withdraw()
+                            root.attributes("-topmost", True)
+                            text = simpledialog.askstring("Beri Label", "Masukkan teks label:", parent=root)
+                            root.destroy()
+                            if text and text.strip():
+                                labels.append({"x": orig_mx, "y": orig_my, "text": text.strip()})
+                        elif active_tool == "ERASE":
+                            # Hapus label dekat klik
+                            labels = [lbl for lbl in labels if math.hypot(lbl["x"] - orig_mx, lbl["y"] - orig_my) > 30]
+                            # Hapus stroke coretan dekat klik
+                            new_scribbles = []
+                            for stroke in scribbles:
+                                keep = True
+                                for pt in stroke:
+                                    if math.hypot(pt[0] - orig_mx, pt[1] - orig_my) < 20:
+                                        keep = False
+                                        break
+                                if keep:
+                                    new_scribbles.append(stroke)
+                            scribbles = new_scribbles
 
         elif event.type == pygame.MOUSEMOTION:
             if active_tool == "DRAW" and is_drawing:
@@ -497,6 +560,40 @@ while running:
     # 7. Render
     screen.fill(BLACK)
     screen.blit(scaled_lapangan, (offset_x, 0))
+
+    # --- Render Cubes on top of stands ---
+    font_cube = pygame.font.SysFont("Arial", 11, bold=True)
+    for s in stands:
+        if s["color"] is not None:
+            # Tentukan warna
+            if s["color"] == "RED":
+                color_val = (255, 0, 0)
+            elif s["color"] == "GREEN":
+                color_val = (0, 200, 0)
+            else: # BLUE
+                color_val = (0, 100, 255)
+            
+            # Hitung pusat stand
+            if s["type"] == "H":
+                cx = s["x"] + 125
+                cy = s["y"]
+            else:
+                cx = s["x"]
+                cy = s["y"] + 105
+                
+            scx = offset_x + cx * SCALE
+            scy = cy * SCALE
+            cube_w = 40 * SCALE
+            cube_h = 40 * SCALE
+            rect_s = pygame.Rect(scx - cube_w / 2, scy - cube_h / 2, cube_w, cube_h)
+            
+            pygame.draw.rect(screen, color_val, rect_s)
+            pygame.draw.rect(screen, BLACK, rect_s, 2)
+            
+            # Draw letter "R", "G", or "B" inside
+            txt_surf = font_cube.render(s["color"][0], True, WHITE)
+            txt_rect = txt_surf.get_rect(center=(scx, scy))
+            screen.blit(txt_surf, txt_rect)
 
     # --- Render Coretan (Scribbles) ---
     for stroke in scribbles:
