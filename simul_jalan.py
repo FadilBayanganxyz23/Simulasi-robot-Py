@@ -587,7 +587,7 @@ while running:
             rect_s = pygame.Rect(scx - cube_w / 2, scy - cube_h / 2, cube_w, cube_h)
             
             pygame.draw.rect(screen, color_val, rect_s)
-            pygame.draw.rect(screen, BLACK, rect_s, 1.5)
+            pygame.draw.rect(screen, BLACK, rect_s, 1)
 
     # --- Render Coretan (Scribbles) ---
     for stroke in scribbles:
