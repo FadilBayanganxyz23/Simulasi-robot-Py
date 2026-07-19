@@ -217,49 +217,59 @@ client_socket = None
 client_buffer = ""
 is_vel_local = False
 
-# Inisialisasi 15 Stand / Slider Box
+# Inisialisasi 15 Stand / Slider Box (dengan label meja P1-P5)
 stands = []
 ox_st = FIELD_OFFSET_X
 oy_st = FIELD_OFFSET_Y
 
-# 1. Horizontal Group 1: ox+750, y in [280, 430, 580]
+# 1. Horizontal Group 1: ox+750, y in [280, 430, 580] (P3)
+y_labels_p3 = {280: "P3 S1", 430: "P3 S2", 580: "P3 S3"}
 for y in [280, 430, 580]:
     stands.append({
         "type": "H", "x": ox_st + 750, "y": oy_st + y,
         "rect": pygame.Rect(ox_st + 750, oy_st + y - 40, 250, 80),
-        "color": None
+        "color": None,
+        "label": y_labels_p3[y]
     })
 
-# 2. Horizontal Group 2: ox+1720, y in [280, 430, 580]
+# 2. Horizontal Group 2: ox+1720, y in [280, 430, 580] (P5)
+y_labels_p5 = {280: "P5 S1", 430: "P5 S2", 580: "P5 S3"}
 for y in [280, 430, 580]:
     stands.append({
         "type": "H", "x": ox_st + 1720, "y": oy_st + y,
         "rect": pygame.Rect(ox_st + 1720, oy_st + y - 40, 250, 80),
-        "color": None
+        "color": None,
+        "label": y_labels_p5[y]
     })
 
-# 3. Horizontal Group 3: ox+500, y in [1330, 1480, 1630]
+# 3. Horizontal Group 3: ox+500, y in [1330, 1480, 1630] (P4)
+y_labels_p4 = {1330: "P4 S3", 1480: "P4 S2", 1630: "P4 S1"}
 for y in [1330, 1480, 1630]:
     stands.append({
         "type": "H", "x": ox_st + 500, "y": oy_st + y,
         "rect": pygame.Rect(ox_st + 500, oy_st + y - 40, 250, 80),
-        "color": None
+        "color": None,
+        "label": y_labels_p4[y]
     })
 
-# 4. Horizontal Group 4: ox+30, y in [3420, 3570, 3720]
+# 4. Horizontal Group 4: ox+30, y in [3420, 3570, 3720] (P2)
+y_labels_p2 = {3420: "P2 S3", 3570: "P2 S2", 3720: "P2 S1"}
 for y in [3420, 3570, 3720]:
     stands.append({
         "type": "H", "x": ox_st + 30, "y": oy_st + y,
         "rect": pygame.Rect(ox_st + 30, oy_st + y - 40, 250, 80),
-        "color": None
+        "color": None,
+        "label": y_labels_p2[y]
     })
 
-# 5. Vertical Group: x in [1100, 1400, 1700], y = oy + 3760
+# 5. Vertical Group: x in [1100, 1400, 1700], y = oy + 3760 (P1)
+x_labels_p1 = {1100: "P1 S1", 1400: "P1 S2", 1700: "P1 S3"}
 for x in [1100, 1400, 1700]:
     stands.append({
         "type": "V", "x": ox_st + x, "y": oy_st + 3760,
         "rect": pygame.Rect(ox_st + x - 40, oy_st + 3760, 80, 210),
-        "color": None
+        "color": None,
+        "label": x_labels_p1[x]
     })
 
 # ---------------------------------------------------------------------------
@@ -724,6 +734,60 @@ while running:
                 screen.blit(desc_surf, (110, y_sec3 + 45 + idx * 22))
 
             draw_separator(y_sec3 + 165)
+
+            # --- SECTION 4: STAND DASHBOARD (RIGHT SIDEBAR) ---
+            right_sidebar_x = offset_x + int(2000 * SCALE) + 20
+            pygame.draw.rect(screen, (15, 15, 15), (right_sidebar_x, 0, screen_w - right_sidebar_x, screen_h))
+            pygame.draw.line(screen, C_DARK, (right_sidebar_x, 0), (right_sidebar_x, screen_h), 2)
+
+            right_title = font_title.render("STAND DASHBOARD", True, C_WHITE)
+            screen.blit(right_title, (right_sidebar_x + 30, 30))
+
+            def get_stand_by_label(lbl):
+                for s in stands:
+                    if s.get("label") == lbl:
+                        return s
+                return None
+
+            def draw_table_section(title, stand_labels, start_y):
+                t_surf = font_text.render(title, True, C_GRAY)
+                screen.blit(t_surf, (right_sidebar_x + 30, start_y))
+                pygame.draw.line(screen, C_DARK, (right_sidebar_x + 30, start_y + 22), (screen_w - 30, start_y + 22), 1)
+                
+                for idx, s_label in enumerate(stand_labels):
+                    s = get_stand_by_label(s_label)
+                    y_pos = start_y + 30 + idx * 22
+                    
+                    lbl_surf = font_text.render(s_label, True, C_WHITE)
+                    screen.blit(lbl_surf, (right_sidebar_x + 30, y_pos))
+                    
+                    color_text = "EMPTY"
+                    color_disp = C_GRAY
+                    indicator_color = (60, 60, 60)
+                    if s and s["color"] is not None:
+                        color_text = s["color"]
+                        if s["color"] == "RED":
+                            color_disp = (255, 100, 100)
+                            indicator_color = (255, 0, 0)
+                        elif s["color"] == "GREEN":
+                            color_disp = (100, 255, 100)
+                            indicator_color = (0, 200, 0)
+                        elif s["color"] == "BLUE":
+                            color_disp = (100, 180, 255)
+                            indicator_color = (0, 100, 255)
+                    
+                    ind_rect = pygame.Rect(right_sidebar_x + 130, y_pos + 4, 12, 12)
+                    pygame.draw.rect(screen, indicator_color, ind_rect)
+                    pygame.draw.rect(screen, C_GRAY, ind_rect, 1)
+                    
+                    status_surf = font_text.render(f"[{color_text}]", True, color_disp)
+                    screen.blit(status_surf, (right_sidebar_x + 155, y_pos))
+
+            draw_table_section("P1 - START AREA (BOTTOM)", ["P1 S1", "P1 S2", "P1 S3"], 80)
+            draw_table_section("P2 - BOTTOM LEFT SIDEBAR", ["P2 S3", "P2 S2", "P2 S1"], 190)
+            draw_table_section("P3 - TOP LEFT SIDEBAR", ["P3 S1", "P3 S2", "P3 S3"], 300)
+            draw_table_section("P4 - MID LEFT SIDEBAR", ["P4 S3", "P4 S2", "P4 S1"], 410)
+            draw_table_section("P5 - TOP RIGHT SIDEBAR", ["P5 S1", "P5 S2", "P5 S3"], 520)
         else:
             text_x       = 20
             text_y_start = 15
