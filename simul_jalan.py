@@ -1,0 +1,673 @@
+"""
+simul_jalan.py
+==============
+Entry point simulator Pygame.
+
+Hanya berisi:
+- Inisialisasi Pygame + server socket
+- Main game loop:
+    1. Terima koneksi & perintah dari GUI client (socket)
+    2. Update navigasi otomatis (step_navigation)
+    3. Update robot (robot.update)
+    4. Kirim status ke GUI (socket)
+    5. Render frame
+
+Semua logika layout, robot, dan navigasi ada di folder simulator/.
+"""
+
+import pygame
+import math
+import sys
+import os
+import socket
+
+# Pastikan window terbuka di tengah layar
+os.environ['SDL_VIDEO_CENTERED'] = '1'
+pygame.init()
+
+screen_w = 1280
+screen_h = 720
+screen   = pygame.display.set_mode((screen_w, screen_h))
+pygame.display.set_caption("Simulasi Robot Omni 12-Sisi - Lapangan 4x2m (Millimeter Exact)")
+clock = pygame.time.Clock()
+
+# ---------------------------------------------------------------------------
+# Import modul simulator (setelah pygame.init())
+# ---------------------------------------------------------------------------
+from simulator.field_layout import (
+    WHITE, BLACK, RED, GREEN, GREY, YELLOW,
+    FIELD_OFFSET_X, FIELD_OFFSET_Y,
+    HOME_X, HOME_Y,
+    build_field_surfaces,
+)
+from simulator.robot import SimRobot
+from simulator.navigation import (
+    init_obstacle_grid,
+    make_nav_state, start_navigation, cancel_navigation, step_navigation,
+)
+
+# ---------------------------------------------------------------------------
+# Bangun lapangan
+# ---------------------------------------------------------------------------
+raw_lapangan, scaled_lapangan, SCALE, offset_x = build_field_surfaces(screen_w, screen_h)
+
+# ---------------------------------------------------------------------------
+# Inisialisasi Robot & Grid Rintangan
+# ---------------------------------------------------------------------------
+robot = SimRobot()
+init_obstacle_grid(robot, raw_lapangan)
+
+# ---------------------------------------------------------------------------
+# Font & State Awal
+# ---------------------------------------------------------------------------
+font_title = pygame.font.SysFont("Arial", 28, bold=True)
+font_text  = pygame.font.SysFont("Arial", 18)
+show_help  = True
+running    = True
+
+# Odometri origin (diperbarui saat RESET_ODOM)
+origin_x     = HOME_X
+origin_y     = HOME_Y
+origin_angle = -math.pi / 2
+
+# Mode kontrol: "STATE_MACHINE" (perintah dari GUI) atau "MANUAL" (keyboard di simulator)
+control_mode = "STATE_MACHINE"
+
+# Kecepatan perintah manual dari GUI
+cmd_vx, cmd_vy, cmd_vw = 0.0, 0.0, 0.0
+use_ext_control = False
+
+# State navigasi otomatis
+nav_state = make_nav_state()
+
+# State Coretan & Label lapangan
+scribbles = []
+labels = []
+active_tool = "TELEPORT"  # "TELEPORT", "DRAW", "LABEL", "ERASE"
+is_drawing = False
+current_stroke = []
+
+# ---------------------------------------------------------------------------
+# State Machine: BALANCE_BG_LEFT
+# ---------------------------------------------------------------------------
+# Konsep:
+#   Fase 1 (SIDE): Robot bergerak ke samping (ke arah tembok samping terdekat)
+#                  sampai sensor samping mencapai jarak TARGET_DIST_MM dari tembok.
+#                  Jika jarak sensor < TARGET_DIST_MM -> gerak menjauh (PWM balik)
+#                  Jika jarak sensor > TARGET_DIST_MM -> gerak mendekat
+#
+#   Fase 2 (BACK): Robot bergerak ke belakang (ke arah tembok belakang terdekat)
+#                  sampai sensor belakang mencapai TARGET_DIST_MM dari tembok.
+#                  Jika jarak sensor < TARGET_DIST_MM -> gerak menjauh (maju)
+#                  Jika jarak sensor > TARGET_DIST_MM -> gerak mendekat (mundur)
+#
+#   Selesai: Kalibrasi odometri ke posisi saat ini, heading dibulatkan ke 90 derajat.
+#
+# Catatan konvensi ext_vx/vy di robot.update():
+#   ext_vx = gerak maju/mundur (sumbu Y global Pygame, positif = maju)
+#   ext_vy = gerak geser kiri/kanan (sumbu X global Pygame, positif = kanan)
+#
+# Jarak sensor = jarak dari dinding ke sisi luar robot = jarak_pusat - ROBOT_RADIUS
+#
+
+TARGET_DIST_MM     = 50     # mm dari sisi robot ke tembok (5 cm)
+BALANCE_KP         = 1.4    # Proportional gain: speed = KP * error
+                            # KP=1.5 → critical (1 langkah pas), <1.5 → smooth tanpa overshoot
+BALANCE_MAX_SPEED  = 80.0   # kecepatan maksimum (mm/s)
+BALANCE_MIN_SPEED  = 6.0    # kecepatan minimum agar tidak berhenti sebelum sampai
+BALANCE_TOLERANCE  = 4.0    # toleransi error (mm) — dianggap selesai
+
+balance_state = {
+    "active":    False,
+    "phase":     None,     # "SIDE" atau "BACK"
+    "wall_side": None,     # "LEFT" atau "RIGHT" (dinding samping terdekat)
+    "wall_back": None,     # "TOP"  atau "BOTTOM" (dinding belakang terdekat)
+    "target_x":  0.0,      # target posisi X pusat robot (fase SIDE)
+    "target_y":  0.0,      # target posisi Y pusat robot (fase BACK)
+}
+
+
+def start_balance(robot, bst):
+    """
+    Inisialisasi state machine BALANCE_BG_LEFT (Balance Belakang Kiri).
+    Menggunakan pembacaan sensor IR kiri dan belakang langsung untuk menjaga jarak 5cm (50mm).
+    """
+    bst["active"] = True
+    bst["phase"]  = "SIDE"
+
+
+def update_balance(robot, bst, raw_lapangan):
+    """
+    Jalankan satu frame logic balance berbasis sensor IR.
+    Menggunakan proportional control: speed = KP * error
+    Kembali: (ext_vx, ext_vy, ext_vw, done)
+    """
+    if not bst["active"]:
+        return 0.0, 0.0, 0.0, False
+
+    # Ambil pembacaan jarak sensor nyata dari sisi robot ke tembok/rintangan (mm)
+    dist_left, dist_back = robot.get_sensor_distances(raw_lapangan)
+
+    def prop_speed(err):
+        raw = BALANCE_KP * abs(err)
+        return max(BALANCE_MIN_SPEED, min(BALANCE_MAX_SPEED, raw))
+
+    a = robot.angle
+    cos_a = math.cos(a)
+    sin_a = math.sin(a)
+
+    # ------------------------------------------------------------------
+    # Fase 1: Geser Samping (SIDE) menggunakan sensor Kiri ke 50mm (5cm)
+    # ------------------------------------------------------------------
+    if bst["phase"] == "SIDE":
+        err = dist_left - TARGET_DIST_MM
+
+        if abs(err) <= BALANCE_TOLERANCE:
+            # Selesai fase SIDE, lanjut ke fase BACK
+            bst["phase"] = "BACK"
+            return 0.0, 0.0, 0.0, False
+
+        spd = prop_speed(err)
+        # Jika err > 0 (terlalu jauh, >50mm) -> gerak kiri (vy_local negatif)
+        # Jika err < 0 (terlalu dekat, <50mm) -> gerak kanan (vy_local positif)
+        vy_local = -spd if err > 0 else spd
+        vx_local = 0.0
+
+        # Konversi local -> global simulator
+        ext_vy = vx_local * cos_a - vy_local * sin_a
+        ext_vx = -vx_local * sin_a - vy_local * cos_a
+        return ext_vx, ext_vy, 0.0, False
+
+    # ------------------------------------------------------------------
+    # Fase 2: Gerak Maju/Mundur (BACK) menggunakan sensor Belakang ke 50mm (5cm)
+    # ------------------------------------------------------------------
+    elif bst["phase"] == "BACK":
+        err = dist_back - TARGET_DIST_MM
+
+        if abs(err) <= BALANCE_TOLERANCE:
+            # Selesai semua fase
+            bst["active"] = False
+            bst["phase"]  = None
+            return 0.0, 0.0, 0.0, True
+
+        spd = prop_speed(err)
+        # Jika err > 0 (terlalu jauh, >50mm) -> gerak belakang (vx_local negatif)
+        # Jika err < 0 (terlalu dekat, <50mm) -> gerak depan (vx_local positif)
+        vx_local = -spd if err > 0 else spd
+        vy_local = 0.0
+
+        # Konversi local -> global simulator
+        ext_vy = vx_local * cos_a - vy_local * sin_a
+        ext_vx = -vx_local * sin_a - vy_local * cos_a
+        return ext_vx, ext_vy, 0.0, False
+
+    return 0.0, 0.0, 0.0, False
+
+
+# ---------------------------------------------------------------------------
+# Server Socket (127.0.0.1:5005)
+# ---------------------------------------------------------------------------
+server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+server_socket.bind(('127.0.0.1', 5005))
+server_socket.listen(1)
+server_socket.setblocking(False)
+
+client_socket = None
+client_buffer = ""
+is_vel_local = False
+
+# ---------------------------------------------------------------------------
+# Main Loop
+# ---------------------------------------------------------------------------
+while running:
+    clock.tick(60)
+
+    # 1. Terima koneksi client baru (non-blocking)
+    try:
+        conn, addr = server_socket.accept()
+        conn.setblocking(False)
+        client_socket = conn
+        client_buffer = ""
+    except BlockingIOError:
+        pass
+
+    # 2. Baca perintah dari client
+    if client_socket:
+        try:
+            data = client_socket.recv(1024)
+            if data:
+                client_buffer += data.decode('utf-8')
+                while "\n" in client_buffer:
+                    line, client_buffer = client_buffer.split("\n", 1)
+                    line = line.strip()
+                    if not line:
+                        continue
+                    parts = line.split()
+
+                    def safe_float(s, default=0.0):
+                        """Konversi string ke float, kembalikan default jika None/invalid."""
+                        try:
+                            if s is None or str(s).strip().lower() == "none":
+                                return default
+                            return float(s)
+                        except (ValueError, TypeError):
+                            return default
+
+                    if control_mode == "MANUAL" and parts[0] in ("VEL", "NAV", "BALANCE_BG_LEFT"):
+                        continue
+
+                    if parts[0] == "VEL" and len(parts) >= 4:
+                        cmd_vx = safe_float(parts[1])
+                        cmd_vy = safe_float(parts[2])
+                        cmd_vw = safe_float(parts[3])
+                        use_ext_control = True
+                        is_vel_local = False
+                        balance_state["active"] = False
+                        cancel_navigation(nav_state)   # manual override
+                    elif parts[0] == "VEL_LOCAL" and len(parts) >= 4:
+                        cmd_vx = safe_float(parts[1])
+                        cmd_vy = safe_float(parts[2])
+                        cmd_vw = safe_float(parts[3])
+                        use_ext_control = True
+                        is_vel_local = True
+                        balance_state["active"] = False
+                        cancel_navigation(nav_state)   # manual override
+
+                    elif parts[0] == "NAV" and len(parts) >= 3:
+                        target_x = safe_float(parts[1])
+                        target_y = safe_float(parts[2])
+                        target_w = safe_float(parts[3]) if len(parts) >= 4 else None
+                        # Gunakan origin_x/origin_y yang dinamis (bukan HOME_X/HOME_Y)
+                        # Sehingga NAV 0 0 = titik origin saat ini, bukan HOME
+                        start_navigation(nav_state, robot, origin_x, origin_y,
+                                         target_x, target_y, target_w)
+                        balance_state["active"] = False
+
+                    elif parts[0] == "CANCEL_NAV":
+                        cancel_navigation(nav_state)
+                        balance_state["active"] = False
+                        cmd_vx, cmd_vy, cmd_vw = 0.0, 0.0, 0.0
+                        use_ext_control = False
+
+                    elif parts[0] == "RESET":
+                        robot.orig_x     = HOME_X
+                        robot.orig_y     = HOME_Y
+                        robot.angle      = -math.pi / 2
+                        robot.total_dist = 0.0
+                        origin_x         = HOME_X
+                        origin_y         = HOME_Y
+                        origin_angle     = -math.pi / 2
+                        cmd_vx, cmd_vy, cmd_vw = 0.0, 0.0, 0.0
+                        use_ext_control = False
+                        is_vel_local = False
+                        balance_state["active"] = False
+                        cancel_navigation(nav_state)
+
+                    elif parts[0] == "RESET_ODOM":
+                        origin_x     = robot.orig_x
+                        origin_y     = robot.orig_y
+                        origin_angle = robot.angle
+                        robot.total_dist = 0.0
+
+                    elif parts[0] == "BALANCE_BG_LEFT":
+                        # Mulai state machine balance dua fase:
+                        #   Fase 1 (SIDE): gerak ke samping sampai 100mm dari tembok
+                        #   Fase 2 (BACK): gerak ke belakang sampai 100mm dari tembok
+                        cancel_navigation(nav_state)
+                        use_ext_control = False
+                        cmd_vx, cmd_vy, cmd_vw = 0.0, 0.0, 0.0
+                        start_balance(robot, balance_state)
+
+            else:
+                # Data kosong -> client disconnect
+                client_socket.close()
+                client_socket = None
+                cmd_vx, cmd_vy, cmd_vw = 0.0, 0.0, 0.0
+                use_ext_control = False
+                is_vel_local = False
+                balance_state["active"] = False
+
+        except BlockingIOError:
+            pass
+        except (ConnectionResetError, BrokenPipeError):
+            client_socket = None
+            cmd_vx, cmd_vy, cmd_vw = 0.0, 0.0, 0.0
+            use_ext_control = False
+            is_vel_local = False
+            balance_state["active"] = False
+
+    # 3. Event Keyboard
+    for event in pygame.event.get():
+        if event.type == pygame.QUIT:
+            running = False
+        elif event.type == pygame.KEYDOWN:
+            if event.key == pygame.K_ESCAPE:
+                running = False
+            elif event.key == pygame.K_h:
+                show_help = not show_help
+            elif event.key == pygame.K_m:
+                # Toggle mode kontrol
+                if control_mode == "STATE_MACHINE":
+                    control_mode = "MANUAL"
+                    # Cancel any active autonomous movements
+                    cancel_navigation(nav_state)
+                    balance_state["active"] = False
+                    cmd_vx, cmd_vy, cmd_vw = 0.0, 0.0, 0.0
+                    use_ext_control = False
+                else:
+                    control_mode = "STATE_MACHINE"
+            elif event.key == pygame.K_F1:
+                active_tool = "TELEPORT"
+            elif event.key == pygame.K_F2:
+                active_tool = "DRAW"
+            elif event.key == pygame.K_F3:
+                active_tool = "LABEL"
+            elif event.key == pygame.K_F4:
+                active_tool = "ERASE"
+            elif event.key == pygame.K_F5:
+                scribbles.clear()
+                labels.clear()
+        elif event.type == pygame.MOUSEBUTTONDOWN:
+            if event.button == 1:  # Left click
+                mx, my = event.pos
+                if mx >= offset_x:
+                    orig_mx = (mx - offset_x) / SCALE
+                    orig_my = my / SCALE
+
+                    if active_tool == "TELEPORT":
+                        if not robot.check_collision(int(orig_mx), int(orig_my), robot.angle, raw_lapangan):
+                            robot.orig_x = int(orig_mx)
+                            robot.orig_y = int(orig_my)
+                    elif active_tool == "DRAW":
+                        is_drawing = True
+                        current_stroke = [(orig_mx, orig_my)]
+                        scribbles.append(current_stroke)
+                    elif active_tool == "LABEL":
+                        import tkinter as tk
+                        from tkinter import simpledialog
+                        root = tk.Tk()
+                        root.withdraw()
+                        root.attributes("-topmost", True)
+                        text = simpledialog.askstring("Beri Label", "Masukkan teks label:", parent=root)
+                        root.destroy()
+                        if text and text.strip():
+                            labels.append({"x": orig_mx, "y": orig_my, "text": text.strip()})
+                    elif active_tool == "ERASE":
+                        # Hapus label dekat klik
+                        labels = [lbl for lbl in labels if math.hypot(lbl["x"] - orig_mx, lbl["y"] - orig_my) > 30]
+                        # Hapus stroke coretan dekat klik
+                        new_scribbles = []
+                        for stroke in scribbles:
+                            keep = True
+                            for pt in stroke:
+                                if math.hypot(pt[0] - orig_mx, pt[1] - orig_my) < 20:
+                                    keep = False
+                                    break
+                            if keep:
+                                new_scribbles.append(stroke)
+                        scribbles = new_scribbles
+
+        elif event.type == pygame.MOUSEMOTION:
+            if active_tool == "DRAW" and is_drawing:
+                mx, my = event.pos
+                if mx >= offset_x:
+                    orig_mx = (mx - offset_x) / SCALE
+                    orig_my = my / SCALE
+                    if not current_stroke or math.hypot(current_stroke[-1][0] - orig_mx, current_stroke[-1][1] - orig_my) > 3:
+                        current_stroke.append((orig_mx, orig_my))
+            elif active_tool == "ERASE" and pygame.mouse.get_pressed()[0]:
+                mx, my = event.pos
+                if mx >= offset_x:
+                    orig_mx = (mx - offset_x) / SCALE
+                    orig_my = my / SCALE
+                    labels = [lbl for lbl in labels if math.hypot(lbl["x"] - orig_mx, lbl["y"] - orig_my) > 30]
+                    new_scribbles = []
+                    for stroke in scribbles:
+                        keep = True
+                        for pt in stroke:
+                            if math.hypot(pt[0] - orig_mx, pt[1] - orig_my) < 20:
+                                keep = False
+                                break
+                        if keep:
+                            new_scribbles.append(stroke)
+                    scribbles = new_scribbles
+
+        elif event.type == pygame.MOUSEBUTTONUP:
+            if event.button == 1:
+                is_drawing = False
+
+    # 4. Hitung kecepatan frame ini
+    nav_vx, nav_vy, nav_vw, nav_ext = step_navigation(robot, nav_state, origin_angle)
+
+    keys = pygame.key.get_pressed()
+
+    # Keyboard reset posisi
+    if keys[pygame.K_r]:
+        robot.orig_x     = HOME_X
+        robot.orig_y     = HOME_Y
+        robot.angle      = -math.pi / 2
+        robot.total_dist = 0.0
+
+    # --- Update balance state machine (jalankan satu frame) ---
+    if control_mode == "MANUAL":
+        robot.update(keys, raw_lapangan)
+    elif balance_state["active"]:
+        bal_vx, bal_vy, bal_vw, bal_done = update_balance(robot, balance_state, raw_lapangan)
+        if bal_done:
+            # Semua fase selesai: kalibrasi heading saja (tanpa reset koordinat)
+            # Koordinat robot bergeser sedikit dari posisi balance — ini normal
+            half_pi = math.pi / 2.0
+            calibrated_angle = round(robot.angle / half_pi) * half_pi
+            rel_a = robot.angle - origin_angle
+            calibrated_rel_a = round(rel_a / half_pi) * half_pi
+            robot.angle  = calibrated_angle
+            origin_angle = calibrated_angle - calibrated_rel_a
+            # TIDAK reset origin_x/origin_y → koordinat tetap kontinu
+            cmd_vx, cmd_vy, cmd_vw = 0.0, 0.0, 0.0
+            use_ext_control = False
+            robot.update(keys, raw_lapangan)
+        else:
+            robot.update(keys, raw_lapangan, bal_vx, bal_vy, bal_vw, use_ext=True)
+    elif nav_state["is_navigating"]:
+        robot.update(keys, raw_lapangan, nav_vx, nav_vy, nav_vw, use_ext=True)
+    elif use_ext_control:
+        robot.update(keys, raw_lapangan, cmd_vx, cmd_vy, cmd_vw, use_ext=True, is_local=is_vel_local)
+    else:
+        robot.update(keys, raw_lapangan)
+
+    # 5. Hitung koordinat relatif terhadap origin dinamis
+    rel_x     = robot.orig_x - origin_x
+    rel_y     = origin_y - robot.orig_y
+    rel_angle = robot.angle - origin_angle
+
+    # 6. Kirim STATUS ke client GUI
+    if client_socket:
+        try:
+            nav_status = 1 if nav_state["is_navigating"] else 0
+            bal_status = 1 if balance_state["active"]    else 0
+            phase_str  = balance_state["phase"] or "NONE"
+            status_msg = (f"STATUS {rel_x} {rel_y} {rel_angle} "
+                          f"{robot.total_dist} {nav_status} {bal_status} {phase_str} "
+                          f"{robot.line_l} {robot.line_r}\n")
+            client_socket.sendall(status_msg.encode('utf-8'))
+        except (BlockingIOError, ConnectionResetError, BrokenPipeError):
+            pass
+
+    # 7. Render
+    screen.fill(BLACK)
+    screen.blit(scaled_lapangan, (offset_x, 0))
+
+    # --- Render Coretan (Scribbles) ---
+    for stroke in scribbles:
+        if len(stroke) >= 2:
+            scaled_stroke = [(offset_x + pt[0] * SCALE, pt[1] * SCALE) for pt in stroke]
+            pygame.draw.lines(screen, RED, False, scaled_stroke, 3)
+        elif len(stroke) == 1:
+            pt = stroke[0]
+            pygame.draw.circle(screen, RED, (int(offset_x + pt[0] * SCALE), int(pt[1] * SCALE)), 3)
+
+    # --- Render Label ---
+    font_lbl = pygame.font.SysFont("Arial", 14, bold=True)
+    for lbl in labels:
+        lx = offset_x + lbl["x"] * SCALE
+        ly = lbl["y"] * SCALE
+        txt_surf = font_lbl.render(lbl["text"], True, BLACK)
+        txt_rect = txt_surf.get_rect(center=(lx, ly))
+        bg_rect = txt_rect.inflate(10, 6)
+        pygame.draw.rect(screen, WHITE, bg_rect)
+        pygame.draw.rect(screen, RED, bg_rect, 1) # Red border
+        screen.blit(txt_surf, txt_rect)
+
+    # Gambar rute A* (hanya garis, tanpa node dan tanpa grid rintangan)
+    waypoints = nav_state["waypoints"]
+    if waypoints:
+        scaled_pts = [(offset_x + pt[0] * SCALE, pt[1] * SCALE) for pt in waypoints]
+        if len(scaled_pts) >= 2:
+            pygame.draw.lines(screen, GREEN, False, scaled_pts, 2)
+
+    # Gambar robot
+    robot.draw(screen, raw_lapangan, SCALE, offset_x)
+
+    # 8. HUD / Control Panel
+    pos_x_cm    = rel_x / 10.0
+    pos_y_cm    = rel_y / 10.0
+    heading_deg = math.degrees(-rel_angle) % 360.0
+
+    if show_help:
+        # Definisi Warna Monokrom
+        C_WHITE = (255, 255, 255)
+        C_LIGHT = (200, 200, 200)
+        C_GRAY  = (140, 140, 140)
+        C_DARK  = (50, 50, 50)
+
+        if offset_x > 220:
+            # Render background sidebar kiri (monokrom gelap premium)
+            pygame.draw.rect(screen, (15, 15, 15), (0, 0, offset_x - 20, screen_h))
+            pygame.draw.line(screen, C_DARK, (offset_x - 20, 0), (offset_x - 20, screen_h), 2)
+
+            # 1. Title
+            title_surf = font_title.render("CONTROL PANEL", True, C_WHITE)
+            screen.blit(title_surf, (30, 30))
+
+            # 2. Status
+            if control_mode == "MANUAL":
+                status_lbl = "KENDALI MANUAL (Keyboard)"
+            elif balance_state["active"]:
+                status_lbl = f"BALANCE {balance_state['phase']}"
+            elif use_ext_control or nav_state["is_navigating"]:
+                status_lbl = "NAVIGASI OTOMATIS" if nav_state["is_navigating"] else "KENDALI GUI AKTIF"
+            else:
+                status_lbl = "IDLE (Menunggu GUI)"
+
+            lbl_status_tag = font_text.render("[ STATUS ]", True, C_GRAY)
+            lbl_status_val = font_text.render(status_lbl, True, C_WHITE)
+            screen.blit(lbl_status_tag, (30, 75))
+            screen.blit(lbl_status_val, (130, 75))
+
+            # Fungsi pembantu untuk menggambar baris pemisah
+            def draw_separator(y_pos):
+                pygame.draw.line(screen, C_DARK, (30, y_pos), (offset_x - 50, y_pos), 1)
+
+            # Fungsi pembantu untuk menampilkan baris data (Label : Value)
+            def draw_row(label, value, y_pos, val_color=C_WHITE):
+                lbl_surf = font_text.render(label, True, C_GRAY)
+                val_surf = font_text.render(value, True, val_color)
+                screen.blit(lbl_surf, (30, y_pos))
+                screen.blit(val_surf, (165, y_pos))
+
+            # --- SECTION 1: POSITION & ODOMETRY ---
+            y_sec1 = 115
+            draw_separator(y_sec1)
+            
+            draw_row("X Coordinate", f"{pos_x_cm/100:+.3f} m", y_sec1 + 15)
+            draw_row("Y Coordinate", f"{pos_y_cm/100:+.3f} m", y_sec1 + 37)
+            draw_row("Heading", f"{heading_deg:.1f}°", y_sec1 + 59)
+            
+            move_color = C_WHITE if robot.movement_status == "DIAM" else C_LIGHT
+            draw_row("Movement Status", robot.movement_status, y_sec1 + 81, move_color)
+            
+            color_l = (0, 255, 0) if robot.line_l else C_GRAY
+            color_r = (0, 255, 0) if robot.line_r else C_GRAY
+            draw_row("Line Sensor L", "AKTIF" if robot.line_l else "MATI", y_sec1 + 103, color_l)
+            draw_row("Line Sensor R", "AKTIF" if robot.line_r else "MATI", y_sec1 + 125, color_r)
+
+            # --- SECTION 2: INTERACTIVE TOOLS ---
+            y_sec2 = 270
+            draw_separator(y_sec2)
+            
+            draw_row("Active Tool", active_tool, y_sec2 + 15, C_WHITE)
+            
+            # Daftar keybindings tool
+            font_small = pygame.font.SysFont("Arial", 14)
+            tool_items = [
+                ("[F1] Teleport", "Klik lapangan untuk memindahkan robot"),
+                ("[F2] Corek Draw", "Klik & seret untuk menggambar"),
+                ("[F3] Text Label", "Klik lapangan untuk membuat teks label"),
+                ("[F4] Eraser", "Klik & seret untuk menghapus coretan/label"),
+                ("[F5] Clear All", "Bersihkan seluruh coretan & label")
+            ]
+            for idx, (key, desc) in enumerate(tool_items):
+                key_surf = font_small.render(key, True, C_WHITE)
+                desc_surf = font_small.render(desc, True, C_GRAY)
+                screen.blit(key_surf, (30, y_sec2 + 45 + idx * 22))
+                screen.blit(desc_surf, (135, y_sec2 + 45 + idx * 22))
+
+            # --- SECTION 3: CONFIGURATION ---
+            y_sec3 = 445
+            draw_separator(y_sec3)
+            
+            draw_row("Control Mode", control_mode, y_sec3 + 15)
+            
+            mode_items = [
+                ("[M]", "Toggle Mode (Manual / State Machine)"),
+                ("[H]", "Tampilkan / Sembunyikan Bantuan"),
+                ("[R]", "Reset posisi robot ke HOME"),
+                ("W/S/A/D", "Gerakan Manual (Maju/Mundur/Geser)"),
+                ("Arrows", "Putar Heading Robot (Manual)")
+            ]
+            for idx, (key, desc) in enumerate(mode_items):
+                key_surf = font_small.render(key, True, C_WHITE)
+                desc_surf = font_small.render(desc, True, C_GRAY)
+                screen.blit(key_surf, (30, y_sec3 + 45 + idx * 22))
+                screen.blit(desc_surf, (110, y_sec3 + 45 + idx * 22))
+
+            draw_separator(y_sec3 + 165)
+        else:
+            text_x       = 20
+            text_y_start = 15
+            text_color   = BLACK
+            text_bg = pygame.Surface((280, 220))
+            text_bg.fill(WHITE)
+            text_bg.set_alpha(200)
+            screen.blit(text_bg, (10, 10))
+
+            text_pos  = font_text.render(f"Robot: X={pos_x_cm/100:+.2f}m, Y={pos_y_cm/100:+.2f}m", True, BLACK)
+            text_dir  = font_text.render(f"Hadap: {heading_deg:.0f}° | Mode: {control_mode}", True, BLACK)
+            text_move = font_text.render(f"Gerak: {robot.movement_status} | Tool: {active_tool}", True, BLACK)
+            text_h1   = font_text.render("W/S/A/D / Arrows: Gerakan Manual", True, (80, 80, 80))
+            text_h2   = font_text.render("F1-F4: Pilih Tool | F5: Clear", True, (80, 80, 80))
+            text_h3   = font_text.render("Tombol M: Toggle Mode | H: Menu", True, (80, 80, 80))
+
+            screen.blit(text_pos,  (text_x, text_y_start))
+            screen.blit(text_dir,  (text_x, text_y_start + 22))
+            screen.blit(text_move, (text_x, text_y_start + 44))
+            screen.blit(text_h1,   (text_x, text_y_start + 72))
+            screen.blit(text_h2,   (text_x, text_y_start + 92))
+            screen.blit(text_h3,   (text_x, text_y_start + 112))
+    else:
+        mini = font_text.render("Tekan 'H' untuk Menu Bantuan", True,
+                                WHITE if offset_x > 220 else BLACK)
+        screen.blit(mini, (20, screen_h - 40))
+
+    pygame.display.flip()
+
+
+# ---------------------------------------------------------------------------
+# Cleanup
+# ---------------------------------------------------------------------------
+if client_socket:
+    client_socket.close()
+server_socket.close()
+pygame.quit()
+sys.exit()
