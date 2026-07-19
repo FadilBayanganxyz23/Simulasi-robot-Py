@@ -365,6 +365,9 @@ while running:
                         origin_angle = robot.angle
                         robot.total_dist = 0.0
 
+                    elif parts[0] == "GRAB":
+                        robot.start_grab()
+
                     elif parts[0] == "BALANCE_BG_LEFT":
                         # Mulai state machine balance dua fase:
                         #   Fase 1 (SIDE): gerak ke samping sampai 100mm dari tembok
@@ -423,6 +426,8 @@ while running:
             elif event.key == pygame.K_F5:
                 scribbles.clear()
                 labels.clear()
+            elif event.key == pygame.K_g:
+                robot.start_grab()
         elif event.type == pygame.MOUSEBUTTONDOWN:
             if event.button == 1:  # Left click
                 mx, my = event.pos
@@ -524,7 +529,7 @@ while running:
 
     # --- Update balance state machine (jalankan satu frame) ---
     if control_mode == "MANUAL":
-        robot.update(keys, raw_lapangan)
+        robot.update(keys, raw_lapangan, stands=stands)
     elif balance_state["active"]:
         bal_vx, bal_vy, bal_vw, bal_done = update_balance(robot, balance_state, raw_lapangan)
         if bal_done:
@@ -539,15 +544,15 @@ while running:
             # TIDAK reset origin_x/origin_y → koordinat tetap kontinu
             cmd_vx, cmd_vy, cmd_vw = 0.0, 0.0, 0.0
             use_ext_control = False
-            robot.update(keys, raw_lapangan)
+            robot.update(keys, raw_lapangan, stands=stands)
         else:
-            robot.update(keys, raw_lapangan, bal_vx, bal_vy, bal_vw, use_ext=True)
+            robot.update(keys, raw_lapangan, bal_vx, bal_vy, bal_vw, use_ext=True, stands=stands)
     elif nav_state["is_navigating"]:
-        robot.update(keys, raw_lapangan, nav_vx, nav_vy, nav_vw, use_ext=True)
+        robot.update(keys, raw_lapangan, nav_vx, nav_vy, nav_vw, use_ext=True, stands=stands)
     elif use_ext_control:
-        robot.update(keys, raw_lapangan, cmd_vx, cmd_vy, cmd_vw, use_ext=True, is_local=is_vel_local)
+        robot.update(keys, raw_lapangan, cmd_vx, cmd_vy, cmd_vw, use_ext=True, is_local=is_vel_local, stands=stands)
     else:
-        robot.update(keys, raw_lapangan)
+        robot.update(keys, raw_lapangan, stands=stands)
 
     # 5. Hitung koordinat relatif terhadap origin dinamis
     rel_x     = robot.orig_x - origin_x
@@ -692,6 +697,7 @@ while running:
             color_r = (0, 255, 0) if robot.line_r else C_GRAY
             draw_row("Line Sensor L", "AKTIF" if robot.line_l else "MATI", y_sec1 + 103, color_l)
             draw_row("Line Sensor R", "AKTIF" if robot.line_r else "MATI", y_sec1 + 125, color_r)
+            draw_row("Storage Cubes", f"{len(robot.storage)} / 8", y_sec1 + 147)
 
             # --- SECTION 2: INTERACTIVE TOOLS ---
             y_sec2 = 270

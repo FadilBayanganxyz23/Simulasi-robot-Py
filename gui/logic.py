@@ -224,6 +224,16 @@ class SequenceManager:
                         time.sleep(0.15)
                         continue
 
+                    # ---- Grab Command ----
+                    if "grab" in nama_lower:
+                        self.active_step_info["limit_type"] = "Grab"
+                        self.active_step_info["limit_val"] = 1.0
+                        self.active_step_info["current_val"] = 0.0
+                        self.send_command("GRAB")
+                        time.sleep(1.0)  # Tunggu cakar bergerak extend & retract
+                        self.active_step_info["current_val"] = 1.0
+                        continue
+
                     # ---- PWM Command (Maju/Mundur & Geser K/K, batas Sensor Garis) ----
                     if "pwm" in nama_lower:
                         self.line_latch = False  # Reset latch

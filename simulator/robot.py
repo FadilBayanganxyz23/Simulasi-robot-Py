@@ -52,6 +52,13 @@ class SimRobot:
         self.movement_status = "DIAM"
         self.line_l = 0
         self.line_r = 0
+        
+        # Gripper & Carousel Storage
+        self.gripper_state = "IDLE"      # "IDLE", "EXTENDING", "RETRACTING"
+        self.gripper_ext = 0.0           # 0.0 to 1.0
+        self.storage = []                # Max 8 elements (colors: RED, GREEN, BLUE)
+        self.carousel_angle = 0.0
+        self.target_carousel_angle = 0.0
 
     # ------------------------------------------------------------------
     # Geometri Robot
@@ -114,7 +121,7 @@ class SimRobot:
     # Update Fisika (IK → FK → Odometri)
     # ------------------------------------------------------------------
 
-    def update(self, keys, raw_lapangan, ext_vx=0.0, ext_vy=0.0, ext_vw=0.0, use_ext=False, is_local=False):
+    def update(self, keys, raw_lapangan, ext_vx=0.0, ext_vy=0.0, ext_vw=0.0, use_ext=False, is_local=False, stands=None):
         """
         Update posisi robot satu frame (60 fps, skala 40 px/frame).
 
@@ -229,6 +236,25 @@ class SimRobot:
         self.movement_status = " + ".join(status) if status else "DIAM"
         self.update_line_sensors(raw_lapangan)
 
+        # Animasi Gripper & Logika Ambil
+        if self.gripper_state == "EXTENDING":
+            self.gripper_ext += 0.05
+            if self.gripper_ext >= 1.0:
+                self.gripper_ext = 1.0
+                self.gripper_state = "RETRACTING"
+                self.perform_grab(stands)
+        elif self.gripper_state == "RETRACTING":
+            self.gripper_ext -= 0.05
+            if self.gripper_ext <= 0.0:
+                self.gripper_ext = 0.0
+                self.gripper_state = "IDLE"
+
+        # Animasi Putar Carousel
+        if self.carousel_angle < self.target_carousel_angle:
+            self.carousel_angle += 3.0
+            if self.carousel_angle >= self.target_carousel_angle:
+                self.carousel_angle = self.target_carousel_angle
+
     def get_line_sensor_positions(self):
         """Return world coordinates (px, py) untuk sensor garis kiri dan kanan di depan robot."""
         cos_a = math.cos(self.angle)
@@ -266,6 +292,47 @@ class SimRobot:
             self.line_r = 1 if (color[0] < 100 and color[1] < 100 and color[2] < 100) else 0
         else:
             self.line_r = 0
+
+    def start_grab(self):
+        if self.gripper_state == "IDLE":
+            self.gripper_state = "EXTENDING"
+            self.gripper_ext = 0.0
+
+    def perform_grab(self, stands):
+        if not stands:
+            return
+        
+        # Arah hadap robot
+        fd_x = math.cos(self.angle)
+        fd_y = math.sin(self.angle)
+        
+        # Ujung gripper berjarak ROBOT_RADIUS + 35mm
+        gripper_tip_dist = self.ROBOT_RADIUS + 35.0
+        tip_x = self.orig_x + gripper_tip_dist * fd_x
+        tip_y = self.orig_y + gripper_tip_dist * fd_y
+        
+        # Cari stand terdekat (maksimal 120 mm)
+        best_stand = None
+        min_d = 120.0
+        for s in stands:
+            if s["type"] == "H":
+                cx = s["x"] + 125
+                cy = s["y"]
+            else:
+                cx = s["x"]
+                cy = s["y"] + 105
+            
+            d = math.hypot(tip_x - cx, tip_y - cy)
+            if d < min_d:
+                min_d = d
+                best_stand = s
+                
+        if best_stand and best_stand["color"] is not None:
+            if len(self.storage) < 8:
+                cube_color = best_stand["color"]
+                best_stand["color"] = None
+                self.storage.append(cube_color)
+                self.target_carousel_angle += 45.0
 
     def _cast_ray_pixel(self, raw_lapangan, ox, oy, dx, dy, max_dist=3000):
         """
@@ -343,6 +410,43 @@ class SimRobot:
         bk_x, bk_y = -math.cos(a), -math.sin(a)   # back direction
 
         # ----------------------------------------------------------------
+        # 0. Gripper depan (animasi cakar & kubus yang dibawa)
+        # ----------------------------------------------------------------
+        if self.gripper_ext > 0.0 or self.gripper_state != "IDLE":
+            base_x = sx + hw * fd_x
+            base_y = sy + hw * fd_y
+            ext_len = 35.0 * self.gripper_ext * scale
+            tip_x = base_x + ext_len * fd_x
+            tip_y = base_y + ext_len * fd_y
+            
+            # Gambar batang utama gripper
+            pygame.draw.line(surface, (180, 180, 180), (int(base_x), int(base_y)), (int(tip_x), int(tip_y)), int(4 * scale) if int(4*scale) > 1 else 2)
+            
+            # Gambar cakar kiri dan kanan
+            c_left_x = tip_x + 8 * scale * fd_x + 12 * scale * lf_x
+            c_left_y = tip_y + 8 * scale * fd_y + 12 * scale * lf_y
+            c_right_x = tip_x + 8 * scale * fd_x - 12 * scale * lf_x
+            c_right_y = tip_y + 8 * scale * fd_y - 12 * scale * lf_y
+            
+            pygame.draw.line(surface, (120, 120, 120), (int(tip_x), int(tip_y)), (int(c_left_x), int(c_left_y)), 2)
+            pygame.draw.line(surface, (120, 120, 120), (int(tip_x), int(tip_y)), (int(c_right_x), int(c_right_y)), 2)
+            
+            # Jika sedang menarik kubus (retracting) dan storage tidak kosong, gambarkan kubus dibawa cakar
+            if self.gripper_state == "RETRACTING" and self.storage:
+                last_color = self.storage[-1]
+                if last_color == "RED":
+                    c_val = (255, 0, 0)
+                elif last_color == "GREEN":
+                    c_val = (0, 200, 0)
+                else:
+                    c_val = (0, 100, 255)
+                # Ukuran kubus dibawa: 14x14 mm (skala)
+                cb_size = 14 * scale
+                cb_rect = pygame.Rect(tip_x + 3*scale*fd_x - cb_size/2, tip_y + 3*scale*fd_y - cb_size/2, cb_size, cb_size)
+                pygame.draw.rect(surface, c_val, cb_rect)
+                pygame.draw.rect(surface, BLACK, cb_rect, 1)
+
+        # ----------------------------------------------------------------
         # 1. Badan robot (12-sisi)
         # ----------------------------------------------------------------
         corners = []
@@ -369,6 +473,65 @@ class SimRobot:
         wr_y = sy + wing_dist * fd_y - wing_half * lf_y
         pygame.draw.polygon(surface, YELLOW, [(tip_x, tip_y), (wl_x, wl_y), (wr_x, wr_y)])
         pygame.draw.polygon(surface, BLACK,  [(tip_x, tip_y), (wl_x, wl_y), (wr_x, wr_y)], 1)
+
+        # ----------------------------------------------------------------
+        # 2b. Carousel Storage (8 slot penampung kubus berputar)
+        # ----------------------------------------------------------------
+        # Background lingkar carousel
+        pygame.draw.circle(surface, (30, 30, 40), (int(sx), int(sy)), int(hw * 0.55))
+        pygame.draw.circle(surface, (100, 100, 120), (int(sx), int(sy)), int(hw * 0.55), 1)
+
+        # Gambar sekat/divider carousel
+        for i in range(8):
+            angle_deg = self.carousel_angle + i * 45.0
+            angle_rad = a + math.radians(angle_deg - 22.5)
+            dx_div = sx + (hw * 0.55) * math.cos(angle_rad)
+            dy_div = sy + (hw * 0.55) * math.sin(angle_rad)
+            pygame.draw.line(surface, (60, 60, 80), (int(sx), int(sy)), (int(dx_div), int(dy_div)), 1)
+
+        # Gambar slot penampung & kubus di dalamnya
+        for i in range(8):
+            angle_deg = self.carousel_angle + i * 45.0
+            angle_rad = a + math.radians(angle_deg)
+            slot_x = sx + (hw * 0.38) * math.cos(angle_rad)
+            slot_y = sy + (hw * 0.38) * math.sin(angle_rad)
+            
+            slot_color = (60, 60, 60) # default kosong (abu-abu gelap)
+            if i < len(self.storage):
+                if self.storage[i] == "RED":
+                    slot_color = (255, 0, 0)
+                elif self.storage[i] == "GREEN":
+                    slot_color = (0, 200, 0)
+                else: # BLUE
+                    slot_color = (0, 100, 255)
+            
+            # Gambar kompartemen slot
+            pygame.draw.circle(surface, slot_color, (int(slot_x), int(slot_y)), int(4 * scale) if int(4*scale) > 1 else 3)
+            pygame.draw.circle(surface, BLACK, (int(slot_x), int(slot_y)), int(4 * scale) if int(4*scale) > 1 else 3, 1)
+
+        # ----------------------------------------------------------------
+        # 3b. Sensor IR DEPAN (magenta)
+        # ----------------------------------------------------------------
+        fs_wx = self.orig_x + self.ROBOT_RADIUS * fd_x
+        fs_wy = self.orig_y + self.ROBOT_RADIUS * fd_y
+        dist_front_raw = self._cast_ray_pixel(raw_lapangan, self.orig_x, self.orig_y, fd_x, fd_y)
+        sensor_dist_front = max(0.0, dist_front_raw - self.ROBOT_RADIUS)
+
+        beam_end_fx = self.orig_x + dist_front_raw * fd_x
+        beam_end_fy = self.orig_y + dist_front_raw * fd_y
+        fs_sx  = offset_x + fs_wx * scale
+        fs_sy  = fs_wy * scale
+        fbe_sx = offset_x + beam_end_fx * scale
+        fbe_sy = beam_end_fy * scale
+
+        pygame.draw.line(surface, (255, 0, 255),
+                         (int(fs_sx), int(fs_sy)),
+                         (int(fbe_sx), int(fbe_sy)), 2)
+        pygame.draw.circle(surface, (255, 0, 255), (int(fs_sx), int(fs_sy)), 5)
+
+        font_s = pygame.font.SysFont("Arial", 11, bold=True)
+        lbl_front = font_s.render(f"{sensor_dist_front:.0f}mm", True, (255, 0, 255))
+        surface.blit(lbl_front, (int(fbe_fx) + 4, int(fbe_fy) - 8) if int(fbe_fy) > 20 else (int(fbe_fx) + 4, 15))
 
         # Garis sumbu depan (kuning tipis, untuk referensi)
         pygame.draw.line(surface, YELLOW,

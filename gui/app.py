@@ -163,9 +163,10 @@ class SequenceGUI:
                 "delay",
                 "find coordinate",
                 "reset coordinate",
-                "balance belakang kiri"
+                "balance belakang kiri",
+                "grab"
             ],
-            width=15
+            width=18
         )
         self.entry_step_name.set("local odometry")
         self.entry_step_name.grid(row=0, column=1, columnspan=5, sticky="ew", padx=2, pady=2)
