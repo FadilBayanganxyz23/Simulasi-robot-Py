@@ -562,7 +562,6 @@ while running:
     screen.blit(scaled_lapangan, (offset_x, 0))
 
     # --- Render Cubes on top of stands ---
-    font_cube = pygame.font.SysFont("Arial", 11, bold=True)
     for s in stands:
         if s["color"] is not None:
             # Tentukan warna
@@ -583,17 +582,12 @@ while running:
                 
             scx = offset_x + cx * SCALE
             scy = cy * SCALE
-            cube_w = 40 * SCALE
-            cube_h = 40 * SCALE
+            cube_w = 20
+            cube_h = 20
             rect_s = pygame.Rect(scx - cube_w / 2, scy - cube_h / 2, cube_w, cube_h)
             
             pygame.draw.rect(screen, color_val, rect_s)
-            pygame.draw.rect(screen, BLACK, rect_s, 2)
-            
-            # Draw letter "R", "G", or "B" inside
-            txt_surf = font_cube.render(s["color"][0], True, WHITE)
-            txt_rect = txt_surf.get_rect(center=(scx, scy))
-            screen.blit(txt_surf, txt_rect)
+            pygame.draw.rect(screen, BLACK, rect_s, 1.5)
 
     # --- Render Coretan (Scribbles) ---
     for stroke in scribbles:
