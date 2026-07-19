@@ -217,6 +217,9 @@ client_socket = None
 client_buffer = ""
 is_vel_local = False
 
+# State machine Ambil Kubus (Approach ke 30mm + Grab)
+grab_sequence_state = {"active": False, "phase": "NONE"}
+
 # Inisialisasi 15 Stand / Slider Box (dengan label meja P1-P5)
 stands = []
 ox_st = FIELD_OFFSET_X
@@ -367,6 +370,12 @@ while running:
 
                     elif parts[0] == "GRAB":
                         robot.start_grab()
+
+                    elif parts[0] == "AMBIL_KUBUS":
+                        grab_sequence_state["active"] = True
+                        grab_sequence_state["phase"] = "APPROACH"
+                        cancel_navigation(nav_state)
+                        balance_state["active"] = False
 
                     elif parts[0] == "BALANCE_BG_LEFT":
                         # Mulai state machine balance dua fase:
@@ -530,6 +539,34 @@ while running:
     # --- Update balance state machine (jalankan satu frame) ---
     if control_mode == "MANUAL":
         robot.update(keys, raw_lapangan, stands=stands)
+    elif grab_sequence_state["active"]:
+        # Jalankan logic approach & grab
+        fd_x = math.cos(robot.angle)
+        fd_y = math.sin(robot.angle)
+        dist_front_raw = robot._cast_ray_pixel(raw_lapangan, robot.orig_x, robot.orig_y, fd_x, fd_y)
+        dist_front = max(0.0, dist_front_raw - robot.ROBOT_RADIUS)
+        
+        if grab_sequence_state["phase"] == "APPROACH":
+            err = dist_front - 30.0
+            if abs(err) <= 2.0:
+                # Jarak sudah pas, mulai mengambil
+                grab_sequence_state["phase"] = "GRABBING"
+                robot.start_grab()
+                robot.update(keys, raw_lapangan, 0.0, 0.0, 0.0, use_ext=True, is_local=True, stands=stands)
+            else:
+                # P-control kecepatan
+                kp = 0.2
+                vx_local = err * kp
+                sign = 1.0 if err > 0 else -1.0
+                vx_local = sign * max(3.0, min(10.0, abs(vx_local)))
+                robot.update(keys, raw_lapangan, vx_local, 0.0, 0.0, use_ext=True, is_local=True, stands=stands)
+        elif grab_sequence_state["phase"] == "GRABBING":
+            # Tunggu cakar selesai
+            robot.update(keys, raw_lapangan, 0.0, 0.0, 0.0, use_ext=True, is_local=True, stands=stands)
+            if robot.gripper_state == "IDLE" and robot.gripper_ext == 0.0:
+                # Selesai seluruh sequence
+                grab_sequence_state["active"] = False
+                grab_sequence_state["phase"] = "NONE"
     elif balance_state["active"]:
         bal_vx, bal_vy, bal_vw, bal_done = update_balance(robot, balance_state, raw_lapangan)
         if bal_done:
@@ -659,6 +696,8 @@ while running:
             # 2. Status
             if control_mode == "MANUAL":
                 status_lbl = "KENDALI MANUAL (Keyboard)"
+            elif grab_sequence_state["active"]:
+                status_lbl = f"AMBIL KUBUS ({grab_sequence_state['phase']})"
             elif balance_state["active"]:
                 status_lbl = f"BALANCE {balance_state['phase']}"
             elif use_ext_control or nav_state["is_navigating"]:
@@ -698,6 +737,9 @@ while running:
             draw_row("Line Sensor L", "AKTIF" if robot.line_l else "MATI", y_sec1 + 103, color_l)
             draw_row("Line Sensor R", "AKTIF" if robot.line_r else "MATI", y_sec1 + 125, color_r)
             draw_row("Storage Cubes", f"{len(robot.storage)} / 8", y_sec1 + 147)
+            # Tampilkan isi storage (warna)
+            content_str = ", ".join([c[0] for c in robot.storage]) if robot.storage else "-"
+            draw_row("Storage Content", f"[{content_str}]", y_sec1 + 169)
 
             # --- SECTION 2: INTERACTIVE TOOLS ---
             y_sec2 = 270

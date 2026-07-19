@@ -224,14 +224,14 @@ class SequenceManager:
                         time.sleep(0.15)
                         continue
 
-                    # ---- Grab Command ----
-                    if "grab" in nama_lower:
-                        self.active_step_info["limit_type"] = "Grab"
-                        self.active_step_info["limit_val"] = 1.0
+                    # ---- Ambil Kubus Command ----
+                    if "ambil kubus" in nama_lower or "ambil_kubus" in nama_lower or "grab" in nama_lower:
+                        self.active_step_info["limit_type"] = "Ambil Kubus"
+                        self.active_step_info["limit_val"] = 30.0
                         self.active_step_info["current_val"] = 0.0
-                        self.send_command("GRAB")
-                        time.sleep(1.0)  # Tunggu cakar bergerak extend & retract
-                        self.active_step_info["current_val"] = 1.0
+                        self.send_command("AMBIL_KUBUS")
+                        time.sleep(2.5)  # Tunggu approach ke 30mm + cakar mengambil
+                        self.active_step_info["current_val"] = 30.0
                         continue
 
                     # ---- PWM Command (Maju/Mundur & Geser K/K, batas Sensor Garis) ----

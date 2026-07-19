@@ -164,7 +164,7 @@ class SequenceGUI:
                 "find coordinate",
                 "reset coordinate",
                 "balance belakang kiri",
-                "grab"
+                "ambil kubus"
             ],
             width=18
         )
