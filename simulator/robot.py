@@ -531,7 +531,7 @@ class SimRobot:
 
         font_s = pygame.font.SysFont("Arial", 11, bold=True)
         lbl_front = font_s.render(f"{sensor_dist_front:.0f}mm", True, (255, 0, 255))
-        surface.blit(lbl_front, (int(fbe_fx) + 4, int(fbe_fy) - 8) if int(fbe_fy) > 20 else (int(fbe_fx) + 4, 15))
+        surface.blit(lbl_front, (int(fbe_sx) + 4, int(fbe_sy) - 8) if int(fbe_sy) > 20 else (int(fbe_sx) + 4, 15))
 
         # Garis sumbu depan (kuning tipis, untuk referensi)
         pygame.draw.line(surface, YELLOW,
