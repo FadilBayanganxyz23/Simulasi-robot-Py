@@ -127,81 +127,95 @@ balance_state = {
 }
 
 
-def start_balance(robot, bst):
+def start_balance(robot, bst, mode):
     """
-    Inisialisasi state machine BALANCE_BG_LEFT (Balance Belakang Kiri).
-    Menggunakan pembacaan sensor IR kiri dan belakang langsung untuk menjaga jarak 5cm (50mm).
+    Inisialisasi state machine Balance.
+    mode: "BALANCE_DEPAN", "BALANCE_KIRI", "BALANCE_DEPAN_KIRI"
     """
     bst["active"] = True
-    bst["phase"]  = "SIDE"
-
+    bst["mode"]   = mode
+    bst["phase"]  = None
 
 def update_balance(robot, bst, raw_lapangan):
     """
-    Jalankan satu frame logic balance berbasis sensor IR.
-    Menggunakan proportional control: speed = KP * error
+    Jalankan satu frame logic balance berbasis sensor IR & US.
     Kembali: (ext_vx, ext_vy, ext_vw, done)
     """
     if not bst["active"]:
         return 0.0, 0.0, 0.0, False
 
-    # Ambil pembacaan jarak sensor nyata dari sisi robot ke tembok/rintangan (mm)
-    dist_left, dist_back = robot.get_sensor_distances(raw_lapangan)
-
-    def prop_speed(err):
-        raw = BALANCE_KP * abs(err)
-        return max(BALANCE_MIN_SPEED, min(BALANCE_MAX_SPEED, raw))
+    (dist_us_f_l, dist_us_f_r, dist_ir_f, dist_ir_l_f, dist_ir_l_b) = robot.get_sensor_distances(raw_lapangan)
 
     a = robot.angle
     cos_a = math.cos(a)
     sin_a = math.sin(a)
 
-    # ------------------------------------------------------------------
-    # Fase 1: Geser Samping (SIDE) menggunakan sensor Kiri ke 50mm (5cm)
-    # ------------------------------------------------------------------
-    if bst["phase"] == "SIDE":
-        err = dist_left - TARGET_DIST_MM
+    def prop_val(err, kp, max_val, min_val=0):
+        val = kp * err
+        if abs(val) < min_val:
+            return 0.0
+        return max(-max_val, min(max_val, val))
 
-        if abs(err) <= BALANCE_TOLERANCE:
-            # Selesai fase SIDE, lanjut ke fase BACK
-            bst["phase"] = "BACK"
-            return 0.0, 0.0, 0.0, False
+    mode = bst.get("mode")
+    vx_local, vy_local, vw = 0.0, 0.0, 0.0
+    is_done = False
 
-        spd = prop_speed(err)
-        # Jika err > 0 (terlalu jauh, >50mm) -> gerak kiri (vy_local negatif)
-        # Jika err < 0 (terlalu dekat, <50mm) -> gerak kanan (vy_local positif)
-        vy_local = -spd if err > 0 else spd
-        vx_local = 0.0
+    if mode == "BALANCE_DEPAN":
+        # Maju/Mundur
+        avg_dist = (dist_us_f_l + dist_us_f_r) / 2.0
+        err_dist = avg_dist - TARGET_DIST_MM
+        vx_local = prop_val(err_dist, BALANCE_KP, BALANCE_MAX_SPEED, BALANCE_MIN_SPEED)
+        
+        # Rotasi
+        err_rot = dist_us_f_l - dist_us_f_r
+        # Jika kiri lebih jauh (err_rot > 0), putar ke kiri (vw positif)
+        # Jika kanan lebih jauh (err_rot < 0), putar ke kanan (vw negatif)
+        vw = prop_val(err_rot, 0.5, 45.0, 0.5)
 
-        # Konversi local -> global simulator
-        ext_vy = vx_local * cos_a - vy_local * sin_a
-        ext_vx = -vx_local * sin_a - vy_local * cos_a
-        return ext_vx, ext_vy, 0.0, False
+        if abs(err_dist) <= BALANCE_TOLERANCE and abs(err_rot) <= 2.0:
+            is_done = True
 
-    # ------------------------------------------------------------------
-    # Fase 2: Gerak Maju/Mundur (BACK) menggunakan sensor Belakang ke 50mm (5cm)
-    # ------------------------------------------------------------------
-    elif bst["phase"] == "BACK":
-        err = dist_back - TARGET_DIST_MM
+    elif mode == "BALANCE_KIRI":
+        # Kiri/Kanan
+        avg_dist = (dist_ir_l_f + dist_ir_l_b) / 2.0
+        err_dist = avg_dist - TARGET_DIST_MM
+        # Jika err_dist > 0 (terlalu jauh), gerak kiri (vy_local negatif)
+        vy_local = -prop_val(err_dist, BALANCE_KP, BALANCE_MAX_SPEED, BALANCE_MIN_SPEED)
+        
+        # Rotasi
+        err_rot = dist_ir_l_b - dist_ir_l_f
+        # Jika belakang lebih jauh (err_rot > 0), berarti robot serong kiri, putar ke kiri (+vw) 
+        vw = prop_val(err_rot, 0.5, 45.0, 0.5)
 
-        if abs(err) <= BALANCE_TOLERANCE:
-            # Selesai semua fase
-            bst["active"] = False
-            bst["phase"]  = None
-            return 0.0, 0.0, 0.0, True
+        if abs(err_dist) <= BALANCE_TOLERANCE and abs(err_rot) <= 2.0:
+            is_done = True
 
-        spd = prop_speed(err)
-        # Jika err > 0 (terlalu jauh, >50mm) -> gerak belakang (vx_local negatif)
-        # Jika err < 0 (terlalu dekat, <50mm) -> gerak depan (vx_local positif)
-        vx_local = -spd if err > 0 else spd
-        vy_local = 0.0
+    elif mode == "BALANCE_DEPAN_KIRI":
+        # Maju/Mundur
+        avg_dist_f = (dist_us_f_l + dist_us_f_r) / 2.0
+        err_dist_f = avg_dist_f - TARGET_DIST_MM
+        vx_local = prop_val(err_dist_f, BALANCE_KP, BALANCE_MAX_SPEED, BALANCE_MIN_SPEED)
+        
+        # Kiri/Kanan
+        avg_dist_l = (dist_ir_l_f + dist_ir_l_b) / 2.0
+        err_dist_l = avg_dist_l - TARGET_DIST_MM
+        vy_local = -prop_val(err_dist_l, BALANCE_KP, BALANCE_MAX_SPEED, BALANCE_MIN_SPEED)
+        
+        # Rotasi menggunakan sensor depan (US)
+        err_rot = dist_us_f_l - dist_us_f_r
+        vw = prop_val(err_rot, 0.5, 45.0, 0.5)
 
-        # Konversi local -> global simulator
-        ext_vy = vx_local * cos_a - vy_local * sin_a
-        ext_vx = -vx_local * sin_a - vy_local * cos_a
-        return ext_vx, ext_vy, 0.0, False
+        if abs(err_dist_f) <= BALANCE_TOLERANCE and abs(err_dist_l) <= BALANCE_TOLERANCE and abs(err_rot) <= 2.0:
+            is_done = True
 
-    return 0.0, 0.0, 0.0, False
+    if is_done:
+        bst["active"] = False
+        return 0.0, 0.0, 0.0, True
+
+    # Konversi local -> global simulator
+    ext_vy = vx_local * cos_a - vy_local * sin_a
+    ext_vx = -vx_local * sin_a - vy_local * cos_a
+    return ext_vx, ext_vy, vw, False
 
 
 # ---------------------------------------------------------------------------
@@ -315,7 +329,7 @@ while running:
                         except (ValueError, TypeError):
                             return default
 
-                    if control_mode == "MANUAL" and parts[0] in ("VEL", "NAV", "BALANCE_BG_LEFT"):
+                    if control_mode == "MANUAL" and parts[0] in ("VEL", "NAV", "BALANCE_DEPAN", "BALANCE_KIRI", "BALANCE_DEPAN_KIRI"):
                         continue
 
                     if parts[0] == "VEL" and len(parts) >= 4:
@@ -364,6 +378,10 @@ while running:
                         is_vel_local = False
                         balance_state["active"] = False
                         cancel_navigation(nav_state)
+                        robot.storage = [None] * 8
+                        robot.carousel_angle = 0.0
+                        robot.target_carousel_angle = 0.0
+                        robot.last_grabbed_color = None
 
                     elif parts[0] == "RESET_ODOM":
                         origin_x     = robot.orig_x
@@ -387,6 +405,12 @@ while running:
                                         elif c == "G": robot.storage[i] = "GREEN"
                                         elif c == "B": robot.storage[i] = "BLUE"
                     
+                    elif parts[0] == "RESET_STORAGE":
+                        robot.storage = [None] * 8
+                        robot.carousel_angle = 0.0
+                        robot.target_carousel_angle = 0.0
+                        robot.last_grabbed_color = None
+                    
                     elif parts[0] == "AMBIL_KUBUS":
                         grab_sequence_state["active"] = True
                         grab_sequence_state["phase"] = "APPROACH"
@@ -406,14 +430,11 @@ while running:
                             balance_state["active"] = False
                             grab_sequence_state["active"] = False
 
-                    elif parts[0] == "BALANCE_BG_LEFT":
-                        # Mulai state machine balance dua fase:
-                        #   Fase 1 (SIDE): gerak ke samping sampai 100mm dari tembok
-                        #   Fase 2 (BACK): gerak ke belakang sampai 100mm dari tembok
+                    elif parts[0] in ("BALANCE_DEPAN", "BALANCE_KIRI", "BALANCE_DEPAN_KIRI"):
                         cancel_navigation(nav_state)
                         use_ext_control = False
                         cmd_vx, cmd_vy, cmd_vw = 0.0, 0.0, 0.0
-                        start_balance(robot, balance_state)
+                        start_balance(robot, balance_state, parts[0])
 
             else:
                 # Data kosong -> client disconnect
@@ -863,7 +884,7 @@ while running:
             elif grab_sequence_state["active"]:
                 status_lbl = f"AMBIL KUBUS ({grab_sequence_state['phase']})"
             elif balance_state["active"]:
-                status_lbl = f"BALANCE {balance_state['phase']}"
+                status_lbl = f"{balance_state.get('mode', 'BALANCE')}"
             elif use_ext_control or nav_state["is_navigating"]:
                 status_lbl = "NAVIGASI OTOMATIS" if nav_state["is_navigating"] else "KENDALI GUI AKTIF"
             else:

@@ -162,7 +162,7 @@
     ],
     "starting": [
         {
-            "nama": "balance belakang kiri",
+            "nama": "balance depan kiri",
             "vx": 0.0,
             "vy": 0.0,
             "vw": 0.0,
@@ -232,7 +232,7 @@
     "MOVE P2": [
         {
             "nama": "find coordinate",
-            "vx": -822.0,
+            "vx": -690.0,
             "vy": -521.0,
             "vw": 90.0,
             "limit_type": "Waktu (s)",
@@ -242,7 +242,7 @@
         {
             "nama": "pwm",
             "vx": 0.0,
-            "vy": 20.0,
+            "vy": -20.0,
             "vw": 0.0,
             "limit_type": "Sensor Garis",
             "limit_val": 2.0,
@@ -309,6 +309,17 @@
             "vw": 0.0,
             "limit_type": "Sensor Garis",
             "limit_val": 0.0,
+            "keterangan": ""
+        }
+    ],
+    "go to home": [
+        {
+            "nama": "find coordinate",
+            "vx": 0.0,
+            "vy": 0.0,
+            "vw": 0.0,
+            "limit_type": "Waktu (s)",
+            "limit_val": 2.0,
             "keterangan": ""
         }
     ]

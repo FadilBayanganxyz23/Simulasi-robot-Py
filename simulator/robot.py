@@ -239,7 +239,17 @@ class SimRobot:
         self.update_line_sensors(raw_lapangan)
 
         # Animasi Gripper & Logika Ambil
-        if self.gripper_state == "EXTENDING":
+        if self.gripper_state == "WAITING_CAROUSEL_GRAB":
+            if abs(self.carousel_angle - self.target_carousel_angle) < 1.0:
+                self.carousel_angle = self.target_carousel_angle
+                self.gripper_state = "EXTENDING"
+                self.gripper_ext = 0.0
+        elif self.gripper_state == "WAITING_CAROUSEL_DROP":
+            if abs(self.carousel_angle - self.target_carousel_angle) < 1.0:
+                self.carousel_angle = self.target_carousel_angle
+                self.gripper_state = "EXTENDING_DROP"
+                self.gripper_ext = 0.0
+        elif self.gripper_state == "EXTENDING":
             self.gripper_ext += 0.05
             if self.gripper_ext >= 1.0:
                 self.gripper_ext = 1.0
@@ -262,11 +272,14 @@ class SimRobot:
                 self.gripper_ext = 0.0
                 self.gripper_state = "IDLE"
 
-        # Animasi Putar Carousel
-        if self.carousel_angle < self.target_carousel_angle:
-            self.carousel_angle += 3.0
-            if self.carousel_angle >= self.target_carousel_angle:
+        # Animasi Putar Carousel (ke arah terpendek)
+        if abs(self.carousel_angle - self.target_carousel_angle) > 0.01:
+            diff = self.target_carousel_angle - self.carousel_angle
+            step = 3.0 if diff > 0 else -3.0
+            if abs(diff) <= abs(step):
                 self.carousel_angle = self.target_carousel_angle
+            else:
+                self.carousel_angle += step
 
     def get_line_sensor_positions(self):
         """Return world coordinates (px, py) untuk sensor garis kiri dan kanan di depan robot."""
@@ -308,14 +321,33 @@ class SimRobot:
 
     def start_grab(self):
         if self.gripper_state == "IDLE":
-            self.gripper_state = "EXTENDING"
-            self.gripper_ext = 0.0
+            target_idx = -1
+            for i in range(8):
+                if self.storage[i] is None:
+                    target_idx = i
+                    break
+            if target_idx != -1:
+                current_mod = self.carousel_angle % 360
+                target_mod = target_idx * 45.0
+                diff = (target_mod - current_mod) % 360
+                if diff > 180:
+                    diff -= 360
+                self.target_carousel_angle = self.carousel_angle + diff
+                self.gripper_state = "WAITING_CAROUSEL_GRAB"
+            else:
+                self.gripper_state = "EXTENDING"
+                self.gripper_ext = 0.0
 
     def start_drop(self, slot_idx):
         if self.gripper_state == "IDLE":
-            self.gripper_state = "EXTENDING_DROP"
-            self.gripper_ext = 0.0
             self.drop_slot = slot_idx
+            current_mod = self.carousel_angle % 360
+            target_mod = slot_idx * 45.0
+            diff = (target_mod - current_mod) % 360
+            if diff > 180:
+                diff -= 360
+            self.target_carousel_angle = self.carousel_angle + diff
+            self.gripper_state = "WAITING_CAROUSEL_DROP"
 
     def perform_grab(self, stands):
         if not stands:
@@ -353,7 +385,6 @@ class SimRobot:
                     best_stand["color"] = None
                     self.storage[i] = cube_color
                     self.last_grabbed_color = cube_color
-                    self.target_carousel_angle += 45.0
                     break
 
     def perform_drop(self, stands):
@@ -391,7 +422,10 @@ class SimRobot:
             if cube_color is not None:
                 self.storage[self.drop_slot] = None
                 best_stand["color"] = cube_color
-                self.target_carousel_angle -= 45.0
+        else:
+            # Jatuhkan kubus (dihapus dari storage) jika tidak ada stand
+            if self.storage[self.drop_slot] is not None:
+                self.storage[self.drop_slot] = None
 
     def _cast_ray_pixel(self, raw_lapangan, ox, oy, dx, dy, max_dist=3000):
         """
@@ -425,20 +459,46 @@ class SimRobot:
 
     def get_sensor_distances(self, raw_lapangan):
         """
-        Hitung jarak sensor IR kiri dan belakang dari SISI robot ke rintangan terdekat.
-        Mendeteksi tembok luar maupun tembok internal dalam layout lapangan.
-
-        Return: (dist_left_mm, dist_back_mm)
+        Hitung jarak dari sisi robot ke tembok untuk sensor:
+        - 2 US Depan (jarak 140mm)
+        - 1 IR Depan Tengah
+        - 2 IR Kiri (jarak 100mm)
+        
+        Return: (dist_us_f_l, dist_us_f_r, dist_ir_f, dist_ir_l_f, dist_ir_l_b)
         """
         a = self.angle
-        lf_x, lf_y =  math.sin(a), -math.cos(a)   # arah kiri robot
-        bk_x, bk_y = -math.cos(a), -math.sin(a)   # arah belakang robot
+        fd_x, fd_y =  math.cos(a),  math.sin(a)
+        lf_x, lf_y =  math.sin(a), -math.cos(a)
 
-        raw_l = self._cast_ray_pixel(raw_lapangan, self.orig_x, self.orig_y, lf_x, lf_y)
-        raw_b = self._cast_ray_pixel(raw_lapangan, self.orig_x, self.orig_y, bk_x, bk_y)
+        # 1. IR Depan (Tengah)
+        raw_ir_f = self._cast_ray_pixel(raw_lapangan, self.orig_x, self.orig_y, fd_x, fd_y)
+        dist_ir_f = max(0.0, raw_ir_f - self.ROBOT_RADIUS)
 
-        # Kurangi ROBOT_RADIUS karena raw_l = jarak dari pusat, bukan dari tepi
-        return max(0.0, raw_l - self.ROBOT_RADIUS), max(0.0, raw_b - self.ROBOT_RADIUS)
+        # 2. US Depan (Kiri & Kanan) - offset 70mm ke kiri dan kanan dari pusat
+        us_l_x = self.orig_x + 70.0 * lf_x
+        us_l_y = self.orig_y + 70.0 * lf_y
+        us_r_x = self.orig_x - 70.0 * lf_x
+        us_r_y = self.orig_y - 70.0 * lf_y
+        
+        raw_us_l = self._cast_ray_pixel(raw_lapangan, us_l_x, us_l_y, fd_x, fd_y)
+        raw_us_r = self._cast_ray_pixel(raw_lapangan, us_r_x, us_r_y, fd_x, fd_y)
+        offset_front = math.sqrt(self.ROBOT_RADIUS**2 - 70.0**2)
+        dist_us_f_l = max(0.0, raw_us_l - offset_front)
+        dist_us_f_r = max(0.0, raw_us_r - offset_front)
+
+        # 3. IR Kiri (Depan & Belakang) - offset 50mm ke depan dan belakang
+        ir_l_f_x = self.orig_x + 50.0 * fd_x
+        ir_l_f_y = self.orig_y + 50.0 * fd_y
+        ir_l_b_x = self.orig_x - 50.0 * fd_x
+        ir_l_b_y = self.orig_y - 50.0 * fd_y
+        
+        raw_ir_l_f = self._cast_ray_pixel(raw_lapangan, ir_l_f_x, ir_l_f_y, lf_x, lf_y)
+        raw_ir_l_b = self._cast_ray_pixel(raw_lapangan, ir_l_b_x, ir_l_b_y, lf_x, lf_y)
+        offset_left = math.sqrt(self.ROBOT_RADIUS**2 - 50.0**2)
+        dist_ir_l_f = max(0.0, raw_ir_l_f - offset_left)
+        dist_ir_l_b = max(0.0, raw_ir_l_b - offset_left)
+
+        return (dist_us_f_l, dist_us_f_r, dist_ir_f, dist_ir_l_f, dist_ir_l_b)
 
     # ------------------------------------------------------------------
     # Rendering
@@ -579,84 +639,57 @@ class SimRobot:
                 text_rect = text_surf.get_rect(center=(int(slot_x), int(slot_y)))
                 surface.blit(text_surf, text_rect)
 
-        # ----------------------------------------------------------------
-        # 3b. Sensor IR DEPAN (magenta)
-        # ----------------------------------------------------------------
-        fs_wx = self.orig_x + self.ROBOT_RADIUS * fd_x
-        fs_wy = self.orig_y + self.ROBOT_RADIUS * fd_y
-        dist_front_raw = self._cast_ray_pixel(raw_lapangan, self.orig_x, self.orig_y, fd_x, fd_y)
-        sensor_dist_front = max(0.0, dist_front_raw - self.ROBOT_RADIUS)
-
-        beam_end_fx = self.orig_x + dist_front_raw * fd_x
-        beam_end_fy = self.orig_y + dist_front_raw * fd_y
-        fs_sx  = offset_x + fs_wx * scale
-        fs_sy  = fs_wy * scale
-        fbe_sx = offset_x + beam_end_fx * scale
-        fbe_sy = beam_end_fy * scale
-
-        pygame.draw.line(surface, (255, 0, 255),
-                         (int(fs_sx), int(fs_sy)),
-                         (int(fbe_sx), int(fbe_sy)), 2)
-        pygame.draw.circle(surface, (255, 0, 255), (int(fs_sx), int(fs_sy)), 5)
-
+        # Ambil semua data sensor
+        (dist_us_f_l, dist_us_f_r, dist_ir_f, dist_ir_l_f, dist_ir_l_b) = self.get_sensor_distances(raw_lapangan)
         font_s = pygame.font.SysFont("Arial", 11, bold=True)
-        lbl_front = font_s.render(f"{sensor_dist_front:.0f}mm", True, (255, 0, 255))
-        surface.blit(lbl_front, (int(fbe_sx) + 4, int(fbe_sy) - 8) if int(fbe_sy) > 20 else (int(fbe_sx) + 4, 15))
-
-        # Garis sumbu depan (kuning tipis, untuk referensi)
-        pygame.draw.line(surface, YELLOW,
-                         (int(sx), int(sy)),
-                         (int(sx + hw * fd_x), int(sy + hw * fd_y)), 2)
-
-        # ----------------------------------------------------------------
-        # 3. Sensor IR KIRI (oranye)
-        # ----------------------------------------------------------------
-        # Posisi mount sensor: tepi kiri robot
-        ls_wx = self.orig_x + self.ROBOT_RADIUS * lf_x
-        ls_wy = self.orig_y + self.ROBOT_RADIUS * lf_y
-        # Ray-march melalui pixel lapangan
-        dist_left_raw = self._cast_ray_pixel(raw_lapangan, self.orig_x, self.orig_y, lf_x, lf_y)
-        sensor_dist_left = max(0.0, dist_left_raw - self.ROBOT_RADIUS)
-
-        beam_end_lx = self.orig_x + dist_left_raw * lf_x
-        beam_end_ly = self.orig_y + dist_left_raw * lf_y
-        ls_sx  = offset_x + ls_wx * scale
-        ls_sy  = ls_wy * scale
-        lbe_sx = offset_x + beam_end_lx * scale
-        lbe_sy = beam_end_ly * scale
-
-        pygame.draw.line(surface, ORANGE,
-                         (int(ls_sx), int(ls_sy)),
-                         (int(lbe_sx), int(lbe_sy)), 2)
-        pygame.draw.circle(surface, ORANGE, (int(ls_sx), int(ls_sy)), 5)
-
-        # Label jarak sensor kiri (mm)
-        font_s = pygame.font.SysFont("Arial", 11, bold=True)
-        lbl_left = font_s.render(f"{sensor_dist_left:.0f}mm", True, ORANGE)
-        surface.blit(lbl_left, (int(lbe_sx) + 4, int(lbe_sy) - 8))
+        
+        def draw_sensor(name, dist_val, ox, oy, dx, dy, color, draw_text=True, text_offset_y=-8):
+            beam_end_x = ox + (dist_val) * dx
+            beam_end_y = oy + (dist_val) * dy
+            ssx, ssy = offset_x + ox * scale, oy * scale
+            bex, bey = offset_x + beam_end_x * scale, beam_end_y * scale
+            
+            pygame.draw.line(surface, color, (int(ssx), int(ssy)), (int(bex), int(bey)), 2)
+            pygame.draw.circle(surface, color, (int(ssx), int(ssy)), 5)
+            
+            if draw_text:
+                lbl = font_s.render(f"{dist_val:.0f}mm", True, color)
+                surface.blit(lbl, (int(bex) + 4, int(bey) + text_offset_y))
 
         # ----------------------------------------------------------------
-        # 4. Sensor IR BELAKANG (cyan)
+        # 3. Sensor US Depan (Kuning) - Kiri dan Kanan
         # ----------------------------------------------------------------
-        bs_wx = self.orig_x + self.ROBOT_RADIUS * bk_x
-        bs_wy = self.orig_y + self.ROBOT_RADIUS * bk_y
-        dist_back_raw = self._cast_ray_pixel(raw_lapangan, self.orig_x, self.orig_y, bk_x, bk_y)
-        sensor_dist_back = max(0.0, dist_back_raw - self.ROBOT_RADIUS)
+        offset_front = math.sqrt(self.ROBOT_RADIUS**2 - 70.0**2)
+        # US Depan Kiri
+        us_l_x = self.orig_x + 70.0 * lf_x + offset_front * fd_x
+        us_l_y = self.orig_y + 70.0 * lf_y + offset_front * fd_y
+        draw_sensor("US_L", dist_us_f_l, us_l_x, us_l_y, fd_x, fd_y, (200, 200, 0), text_offset_y=-15)
+        
+        # US Depan Kanan
+        us_r_x = self.orig_x - 70.0 * lf_x + offset_front * fd_x
+        us_r_y = self.orig_y - 70.0 * lf_y + offset_front * fd_y
+        draw_sensor("US_R", dist_us_f_r, us_r_x, us_r_y, fd_x, fd_y, (200, 200, 0), text_offset_y=5)
 
-        beam_end_bx = self.orig_x + dist_back_raw * bk_x
-        beam_end_by = self.orig_y + dist_back_raw * bk_y
-        bs_sx  = offset_x + bs_wx * scale
-        bs_sy  = bs_wy * scale
-        bbe_sx = offset_x + beam_end_bx * scale
-        bbe_sy = beam_end_by * scale
+        # ----------------------------------------------------------------
+        # 4. Sensor IR Depan (Magenta) - Tengah
+        # ----------------------------------------------------------------
+        ir_f_x = self.orig_x + self.ROBOT_RADIUS * fd_x
+        ir_f_y = self.orig_y + self.ROBOT_RADIUS * fd_y
+        draw_sensor("IR_F", dist_ir_f, ir_f_x, ir_f_y, fd_x, fd_y, (255, 0, 255))
 
-        pygame.draw.line(surface, CYAN,
-                         (int(bs_sx), int(bs_sy)),
-                         (int(bbe_sx), int(bbe_sy)), 2)
-        pygame.draw.circle(surface, CYAN, (int(bs_sx), int(bs_sy)), 5)
-
-        lbl_back = font_s.render(f"{sensor_dist_back:.0f}mm", True, CYAN)
-        surface.blit(lbl_back, (int(bbe_sx) + 4, int(bbe_sy) - 8))
+        # ----------------------------------------------------------------
+        # 5. Sensor IR Kiri (Oranye) - Depan dan Belakang
+        # ----------------------------------------------------------------
+        offset_left = math.sqrt(self.ROBOT_RADIUS**2 - 50.0**2)
+        # IR Kiri Depan
+        ir_l_f_x = self.orig_x + 50.0 * fd_x + offset_left * lf_x
+        ir_l_f_y = self.orig_y + 50.0 * fd_y + offset_left * lf_y
+        draw_sensor("IR_LF", dist_ir_l_f, ir_l_f_x, ir_l_f_y, lf_x, lf_y, (255, 128, 0), text_offset_y=-15)
+        
+        # IR Kiri Belakang
+        ir_l_b_x = self.orig_x - 50.0 * fd_x + offset_left * lf_x
+        ir_l_b_y = self.orig_y - 50.0 * fd_y + offset_left * lf_y
+        draw_sensor("IR_LB", dist_ir_l_b, ir_l_b_x, ir_l_b_y, lf_x, lf_y, (255, 128, 0), text_offset_y=5)
 
         # ----------------------------------------------------------------
         # 5. Sensor Garis Depan Kiri & Kanan (merah/hijau indikator)

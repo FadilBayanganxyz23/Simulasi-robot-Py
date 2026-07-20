@@ -163,7 +163,9 @@ class SequenceGUI:
                 "delay",
                 "find coordinate",
                 "reset coordinate",
-                "balance belakang kiri",
+                "balance depan",
+                "balance kiri",
+                "balance depan kiri",
                 "ambil kubus",
                 "taruh kubus"
             ],
@@ -378,6 +380,10 @@ class SequenceGUI:
         
         slots_box = ttk.Frame(card_storage)
         slots_box.pack(pady=2)
+        
+        btn_reset_st = ttk.Button(card_storage, text="🗑 Reset Storage", command=self._reset_storage)
+        btn_reset_st.pack(pady=3)
+        
         self.lbl_storage_slots = []
         for i in range(8):
             char_num = chr(0x2776 + i)
@@ -411,6 +417,12 @@ class SequenceGUI:
         
         # Kirim perintah update storage ke simulator
         self.manager.set_storage_manual(current_colors)
+
+    def _reset_storage(self):
+        empty_colors = ["-"] * 8
+        self.manager.storage_colors = empty_colors
+        self.manager.storage_count = 0
+        self.manager.send_command("RESET_STORAGE")
 
     def _build_queue_panels(self, parent):
         paned = ttk.PanedWindow(parent, orient=tk.HORIZONTAL)

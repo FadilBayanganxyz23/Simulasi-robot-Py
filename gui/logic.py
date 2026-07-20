@@ -385,13 +385,24 @@ class SequenceManager:
                         time.sleep(0.15)
                         continue
 
-                    # ---- Balance Belakang Kiri ----
-                    if (nama_lower.startswith("balance belakang kiri") or
-                            nama_lower.startswith("balance_belakang_kiri")):
+                    # ---- Balance Baru ----
+                    if "balance depan kiri" in nama_lower or "balance_depan_kiri" in nama_lower:
                         self.active_step_info["limit_type"] = "Balancing"
                         self.active_step_info["limit_val"] = 100.0
                         self.active_step_info["current_val"] = 0.0
-                        self.send_command("BALANCE_BG_LEFT")
+                        self.send_command("BALANCE_DEPAN_KIRI")
+
+                    elif "balance depan" in nama_lower or "balance_depan" in nama_lower:
+                        self.active_step_info["limit_type"] = "Balancing"
+                        self.active_step_info["limit_val"] = 100.0
+                        self.active_step_info["current_val"] = 0.0
+                        self.send_command("BALANCE_DEPAN")
+
+                    elif "balance kiri" in nama_lower or "balance_kiri" in nama_lower:
+                        self.active_step_info["limit_type"] = "Balancing"
+                        self.active_step_info["limit_val"] = 100.0
+                        self.active_step_info["current_val"] = 0.0
+                        self.send_command("BALANCE_KIRI")
 
                         # Tunggu simulator konfirmasi balance MULAI (max 1 detik)
                         wait_start = time.time()
