@@ -217,8 +217,11 @@ client_socket = None
 client_buffer = ""
 is_vel_local = False
 
-# State machine Ambil Kubus (Approach ke 30mm + Grab)
-grab_sequence_state = {"active": False, "phase": "NONE"}
+# State machine Ambil Kubus (Approach stand terdekat + Grab)
+grab_sequence_state = {"active": False, "phase": "NONE", "_stuck_count": 0}
+
+# State machine Taruh Kubus (Approach stand terdekat + Drop)
+drop_sequence_state = {"active": False, "phase": "NONE", "slot": 0, "_stuck_count": 0}
 
 # Inisialisasi 15 Stand / Slider Box (dengan label meja P1-P5)
 stands = []
@@ -371,11 +374,37 @@ while running:
                     elif parts[0] == "GRAB":
                         robot.start_grab()
 
+                    elif parts[0] == "SET_STORAGE":
+                        if len(parts) >= 2:
+                            if parts[1] == "-":
+                                robot.storage = [None] * 8
+                            else:
+                                colors_raw = parts[1].split(",")
+                                robot.storage = [None] * 8
+                                for i, c in enumerate(colors_raw):
+                                    if i < 8:
+                                        if c == "R": robot.storage[i] = "RED"
+                                        elif c == "G": robot.storage[i] = "GREEN"
+                                        elif c == "B": robot.storage[i] = "BLUE"
+                    
                     elif parts[0] == "AMBIL_KUBUS":
                         grab_sequence_state["active"] = True
                         grab_sequence_state["phase"] = "APPROACH"
+                        grab_sequence_state["_stuck_count"] = 0
                         cancel_navigation(nav_state)
                         balance_state["active"] = False
+                        drop_sequence_state["active"] = False
+
+                    elif parts[0] == "TARUH_KUBUS":
+                        if len(parts) >= 2:
+                            slot_idx = int(parts[1])
+                            drop_sequence_state["active"] = True
+                            drop_sequence_state["phase"] = "APPROACH"
+                            drop_sequence_state["_stuck_count"] = 0
+                            drop_sequence_state["slot"] = slot_idx
+                            cancel_navigation(nav_state)
+                            balance_state["active"] = False
+                            grab_sequence_state["active"] = False
 
                     elif parts[0] == "BALANCE_BG_LEFT":
                         # Mulai state machine balance dua fase:
@@ -543,23 +572,76 @@ while running:
         # Jalankan logic approach & grab
         fd_x = math.cos(robot.angle)
         fd_y = math.sin(robot.angle)
-        dist_front_raw = robot._cast_ray_pixel(raw_lapangan, robot.orig_x, robot.orig_y, fd_x, fd_y)
-        dist_front = max(0.0, dist_front_raw - robot.ROBOT_RADIUS)
         
         if grab_sequence_state["phase"] == "APPROACH":
-            err = dist_front - 30.0
-            if abs(err) <= 2.0:
-                # Jarak sudah pas, mulai mengambil
+            # Hitung posisi ujung gripper saat fully extended
+            gripper_tip_dist = robot.ROBOT_RADIUS + 35.0
+            tip_x = robot.orig_x + gripper_tip_dist * fd_x
+            tip_y = robot.orig_y + gripper_tip_dist * fd_y
+            
+            # Cari stand terdekat di depan robot (dalam jangkauan gripper)
+            best_stand = None
+            min_d = 999999.0
+            for s in stands:
+                if s["color"] is None:
+                    continue  # Lewati stand kosong
+                if s["type"] == "H":
+                    cx = s["x"] + 125
+                    cy = s["y"]
+                else:
+                    cx = s["x"]
+                    cy = s["y"] + 105
+                
+                # Cek apakah stand ini berada di depan robot (dot product positif)
+                to_stand_x = cx - robot.orig_x
+                to_stand_y = cy - robot.orig_y
+                dot = to_stand_x * fd_x + to_stand_y * fd_y
+                if dot <= 0:
+                    continue  # Stand di belakang robot, lewati
+                
+                d = math.hypot(tip_x - cx, tip_y - cy)
+                if d < min_d:
+                    min_d = d
+                    best_stand = s
+            
+            if best_stand is None:
+                # Tidak ada stand berisi di depan robot — langsung grab saja
                 grab_sequence_state["phase"] = "GRABBING"
                 robot.start_grab()
                 robot.update(keys, raw_lapangan, 0.0, 0.0, 0.0, use_ext=True, is_local=True, stands=stands)
             else:
-                # P-control kecepatan
-                kp = 0.2
-                vx_local = err * kp
-                sign = 1.0 if err > 0 else -1.0
-                vx_local = sign * max(3.0, min(10.0, abs(vx_local)))
-                robot.update(keys, raw_lapangan, vx_local, 0.0, 0.0, use_ext=True, is_local=True, stands=stands)
+                # Jarak gripper tip ke stand center
+                grab_range = 100.0  # mm — jarak maks gripper bisa meraih
+                
+                if min_d <= grab_range:
+                    # Sudah dalam jangkauan — mulai mengambil
+                    grab_sequence_state["phase"] = "GRABBING"
+                    robot.start_grab()
+                    robot.update(keys, raw_lapangan, 0.0, 0.0, 0.0, use_ext=True, is_local=True, stands=stands)
+                else:
+                    # Belum cukup dekat — maju ke arah stand
+                    err = min_d - grab_range
+                    kp = 0.15
+                    vx_local = err * kp
+                    vx_local = max(3.0, min(10.0, vx_local))
+                    
+                    old_x = robot.orig_x
+                    old_y = robot.orig_y
+                    robot.update(keys, raw_lapangan, vx_local, 0.0, 0.0, use_ext=True, is_local=True, stands=stands)
+                    
+                    # Deteksi stuck: jika robot tidak bergerak (collision), langsung grab
+                    actual_move = math.hypot(robot.orig_x - old_x, robot.orig_y - old_y)
+                    if actual_move < 0.1:
+                        if not hasattr(grab_sequence_state, '_stuck_count'):
+                            grab_sequence_state['_stuck_count'] = 0
+                        grab_sequence_state['_stuck_count'] = grab_sequence_state.get('_stuck_count', 0) + 1
+                        if grab_sequence_state['_stuck_count'] > 10:  # Stuck 10 frame berturut-turut
+                            grab_sequence_state["phase"] = "GRABBING"
+                            grab_sequence_state['_stuck_count'] = 0
+                            robot.start_grab()
+                    else:
+                        grab_sequence_state['_stuck_count'] = 0
+                        
         elif grab_sequence_state["phase"] == "GRABBING":
             # Tunggu cakar selesai
             robot.update(keys, raw_lapangan, 0.0, 0.0, 0.0, use_ext=True, is_local=True, stands=stands)
@@ -567,6 +649,83 @@ while running:
                 # Selesai seluruh sequence
                 grab_sequence_state["active"] = False
                 grab_sequence_state["phase"] = "NONE"
+                grab_sequence_state['_stuck_count'] = 0
+    elif drop_sequence_state["active"]:
+        # Jalankan logic approach & drop (mirip ambil kubus)
+        fd_x = math.cos(robot.angle)
+        fd_y = math.sin(robot.angle)
+        
+        if drop_sequence_state["phase"] == "APPROACH":
+            # Hitung posisi ujung gripper saat fully extended
+            gripper_tip_dist = robot.ROBOT_RADIUS + 35.0
+            tip_x = robot.orig_x + gripper_tip_dist * fd_x
+            tip_y = robot.orig_y + gripper_tip_dist * fd_y
+            
+            # Cari stand terdekat di depan robot (yang KOSONG)
+            best_stand = None
+            min_d = 999999.0
+            for s in stands:
+                if s["color"] is not None:
+                    continue  # Lewati stand yang sudah ada isinya
+                if s["type"] == "H":
+                    cx = s["x"] + 125
+                    cy = s["y"]
+                else:
+                    cx = s["x"]
+                    cy = s["y"] + 105
+                
+                # Cek apakah stand ini berada di depan robot
+                to_stand_x = cx - robot.orig_x
+                to_stand_y = cy - robot.orig_y
+                dot = to_stand_x * fd_x + to_stand_y * fd_y
+                if dot <= 0:
+                    continue
+                
+                d = math.hypot(tip_x - cx, tip_y - cy)
+                if d < min_d:
+                    min_d = d
+                    best_stand = s
+            
+            if best_stand is None:
+                # Tidak ada stand kosong di depan robot — langsung drop saja
+                drop_sequence_state["phase"] = "DROPPING"
+                robot.start_drop(drop_sequence_state["slot"])
+                robot.update(keys, raw_lapangan, 0.0, 0.0, 0.0, use_ext=True, is_local=True, stands=stands)
+            else:
+                # Jarak gripper tip ke stand center
+                drop_range = 100.0  # mm
+                
+                if min_d <= drop_range:
+                    drop_sequence_state["phase"] = "DROPPING"
+                    robot.start_drop(drop_sequence_state["slot"])
+                    robot.update(keys, raw_lapangan, 0.0, 0.0, 0.0, use_ext=True, is_local=True, stands=stands)
+                else:
+                    err = min_d - drop_range
+                    kp = 0.15
+                    vx_local = err * kp
+                    vx_local = max(3.0, min(10.0, vx_local))
+                    
+                    old_x = robot.orig_x
+                    old_y = robot.orig_y
+                    robot.update(keys, raw_lapangan, vx_local, 0.0, 0.0, use_ext=True, is_local=True, stands=stands)
+                    
+                    # Deteksi stuck
+                    actual_move = math.hypot(robot.orig_x - old_x, robot.orig_y - old_y)
+                    if actual_move < 0.1:
+                        drop_sequence_state['_stuck_count'] = drop_sequence_state.get('_stuck_count', 0) + 1
+                        if drop_sequence_state['_stuck_count'] > 10:
+                            drop_sequence_state["phase"] = "DROPPING"
+                            drop_sequence_state['_stuck_count'] = 0
+                            robot.start_drop(drop_sequence_state["slot"])
+                    else:
+                        drop_sequence_state['_stuck_count'] = 0
+                        
+        elif drop_sequence_state["phase"] == "DROPPING":
+            robot.update(keys, raw_lapangan, 0.0, 0.0, 0.0, use_ext=True, is_local=True, stands=stands)
+            if robot.gripper_state == "IDLE" and robot.gripper_ext == 0.0:
+                drop_sequence_state["active"] = False
+                drop_sequence_state["phase"] = "NONE"
+                drop_sequence_state['_stuck_count'] = 0
     elif balance_state["active"]:
         bal_vx, bal_vy, bal_vw, bal_done = update_balance(robot, balance_state, raw_lapangan)
         if bal_done:
@@ -602,9 +761,14 @@ while running:
             nav_status = 1 if nav_state["is_navigating"] else 0
             bal_status = 1 if balance_state["active"]    else 0
             phase_str  = balance_state["phase"] or "NONE"
+            grab_active = 1 if grab_sequence_state["active"] else 0
+            drop_active = 1 if drop_sequence_state["active"] else 0
+            storage_count = sum(1 for c in robot.storage if c is not None)
+            storage_colors = ",".join([c[0] if c else "-" for c in robot.storage])
             status_msg = (f"STATUS {rel_x} {rel_y} {rel_angle} "
                           f"{robot.total_dist} {nav_status} {bal_status} {phase_str} "
-                          f"{robot.line_l} {robot.line_r}\n")
+                          f"{robot.line_l} {robot.line_r} "
+                          f"{grab_active} {storage_count} {storage_colors} {drop_active}\n")
             client_socket.sendall(status_msg.encode('utf-8'))
         except (BlockingIOError, ConnectionResetError, BrokenPipeError):
             pass
@@ -736,13 +900,14 @@ while running:
             color_r = (0, 255, 0) if robot.line_r else C_GRAY
             draw_row("Line Sensor L", "AKTIF" if robot.line_l else "MATI", y_sec1 + 103, color_l)
             draw_row("Line Sensor R", "AKTIF" if robot.line_r else "MATI", y_sec1 + 125, color_r)
-            draw_row("Storage Cubes", f"{len(robot.storage)} / 8", y_sec1 + 147)
+            storage_count = sum(1 for c in robot.storage if c is not None)
+            draw_row("Storage Cubes", f"{storage_count} / 8", y_sec1 + 147)
             # Tampilkan isi storage (warna)
-            content_str = ", ".join([c[0] for c in robot.storage]) if robot.storage else "-"
+            content_str = ", ".join([c[0] if c else "-" for c in robot.storage])
             draw_row("Storage Content", f"[{content_str}]", y_sec1 + 169)
 
             # --- SECTION 2: INTERACTIVE TOOLS ---
-            y_sec2 = 270
+            y_sec2 = 310
             draw_separator(y_sec2)
             
             draw_row("Active Tool", active_tool, y_sec2 + 15, C_WHITE)
@@ -763,7 +928,7 @@ while running:
                 screen.blit(desc_surf, (135, y_sec2 + 45 + idx * 22))
 
             # --- SECTION 3: CONFIGURATION ---
-            y_sec3 = 445
+            y_sec3 = 475
             draw_separator(y_sec3)
             
             draw_row("Control Mode", control_mode, y_sec3 + 15)

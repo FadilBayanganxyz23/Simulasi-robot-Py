@@ -35,6 +35,10 @@ class SequenceManager:
         self.running_sequence = False
         self.robot_navigating = False
         self.robot_balancing  = False   # True saat balance state machine aktif di simulator
+        self.robot_grabbing   = False   # True saat grab sequence aktif di simulator
+        self.robot_dropping   = False   # True saat drop sequence aktif di simulator
+        self.storage_count    = 0       # Jumlah kubus di storage robot (0-8)
+        self.storage_colors   = ["-"] * 8      # List warna kubus: ["R", "G", "B", ...] atau "-"
         self.line_sensors     = {"left": 0, "right": 0}
         self.line_latch       = False
         self.active_step_info = {
@@ -132,6 +136,33 @@ class SequenceManager:
                         else:
                             self.line_sensors["left"]  = 0
                             self.line_sensors["right"] = 0
+                        
+                        # Kolom 11: grab_active (1=grab sequence aktif)
+                        if len(parts) >= 11:
+                            self.robot_grabbing = (int(parts[10]) == 1)
+                        else:
+                            self.robot_grabbing = False
+                        
+                        # Kolom 12: storage_count (jumlah kubus)
+                        if len(parts) >= 12:
+                            self.storage_count = int(parts[11])
+                        else:
+                            self.storage_count = 0
+                        
+                        # Kolom 13: storage_colors ("R,G,B" atau "-")
+                        if len(parts) >= 13:
+                            raw_colors = parts[12]
+                            self.storage_colors = raw_colors.split(",") if raw_colors != "-" else ["-"] * 8
+                            while len(self.storage_colors) < 8:
+                                self.storage_colors.append("-")
+                        else:
+                            self.storage_colors = ["-"] * 8
+                            
+                        # Kolom 14: drop_active
+                        if len(parts) >= 14:
+                            self.robot_dropping = (int(parts[13]) == 1)
+                        else:
+                            self.robot_dropping = False
             except Exception:
                 break
         self.pygame_socket = None
@@ -143,6 +174,12 @@ class SequenceManager:
                 self.pygame_socket.sendall((cmd_str + "\n").encode('utf-8'))
             except (ConnectionResetError, BrokenPipeError):
                 self.pygame_socket = None
+
+    def set_storage_manual(self, colors_list):
+        """Kirim perintah update storage ke simulator"""
+        if self.pygame_socket and not self.running_sequence:
+            color_str = ",".join(colors_list) if colors_list else "-"
+            self.send_command(f"SET_STORAGE {color_str}")
 
     # ------------------------------------------------------------------
     # Manajemen Preset
@@ -227,11 +264,59 @@ class SequenceManager:
                     # ---- Ambil Kubus Command ----
                     if "ambil kubus" in nama_lower or "ambil_kubus" in nama_lower or "grab" in nama_lower:
                         self.active_step_info["limit_type"] = "Ambil Kubus"
-                        self.active_step_info["limit_val"] = 30.0
+                        self.active_step_info["limit_val"] = 1.0
                         self.active_step_info["current_val"] = 0.0
+                        storage_before = self.storage_count
                         self.send_command("AMBIL_KUBUS")
-                        time.sleep(2.5)  # Tunggu approach ke 30mm + cakar mengambil
-                        self.active_step_info["current_val"] = 30.0
+
+                        # Tunggu grab sequence MULAI di simulator (max 1 detik)
+                        wait_start = time.time()
+                        while self.running_sequence and not self.robot_grabbing:
+                            time.sleep(0.05)
+                            if time.time() - wait_start > 1.0:
+                                break
+
+                        # Tunggu grab sequence SELESAI di simulator (max 10 detik)
+                        wait_start = time.time()
+                        while self.running_sequence and self.robot_grabbing:
+                            time.sleep(0.05)
+                            elapsed = time.time() - wait_start
+                            self.active_step_info["current_val"] = min(1.0, elapsed / 5.0)
+                            if elapsed > 10.0:
+                                break
+
+                        self.active_step_info["current_val"] = 1.0
+                        time.sleep(0.15)
+                        continue
+
+                    # ---- Taruh Kubus Command ----
+                    if "taruh kubus" in nama_lower or "taruh_kubus" in nama_lower or "drop" in nama_lower:
+                        self.active_step_info["limit_type"] = "Taruh Kubus"
+                        # slot 1-8 -> idx 0-7
+                        slot_idx = int(float(self.active_step_info.get("limit_val", 1))) - 1
+                        slot_idx = max(0, min(7, slot_idx))
+                        
+                        self.active_step_info["current_val"] = 0.0
+                        self.send_command(f"TARUH_KUBUS {slot_idx}")
+
+                        # Tunggu drop sequence MULAI di simulator (max 1 detik)
+                        wait_start = time.time()
+                        while self.running_sequence and not self.robot_dropping:
+                            time.sleep(0.05)
+                            if time.time() - wait_start > 1.0:
+                                break
+
+                        # Tunggu drop sequence SELESAI di simulator (max 10 detik)
+                        wait_start = time.time()
+                        while self.running_sequence and self.robot_dropping:
+                            time.sleep(0.05)
+                            elapsed = time.time() - wait_start
+                            self.active_step_info["current_val"] = min(1.0, elapsed / 5.0)
+                            if elapsed > 10.0:
+                                break
+
+                        self.active_step_info["current_val"] = 1.0
+                        time.sleep(0.15)
                         continue
 
                     # ---- PWM Command (Maju/Mundur & Geser K/K, batas Sensor Garis) ----

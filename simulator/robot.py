@@ -56,7 +56,9 @@ class SimRobot:
         # Gripper & Carousel Storage
         self.gripper_state = "IDLE"      # "IDLE", "EXTENDING", "RETRACTING"
         self.gripper_ext = 0.0           # 0.0 to 1.0
-        self.storage = []                # Max 8 elements (colors: RED, GREEN, BLUE)
+        self.drop_slot = 0
+        self.storage = [None] * 8                # Max 8 elements (colors: RED, GREEN, BLUE)
+        self.last_grabbed_color = None
         self.carousel_angle = 0.0
         self.target_carousel_angle = 0.0
 
@@ -248,6 +250,17 @@ class SimRobot:
             if self.gripper_ext <= 0.0:
                 self.gripper_ext = 0.0
                 self.gripper_state = "IDLE"
+        elif self.gripper_state == "EXTENDING_DROP":
+            self.gripper_ext += 0.05
+            if self.gripper_ext >= 1.0:
+                self.gripper_ext = 1.0
+                self.gripper_state = "RETRACTING_DROP"
+                self.perform_drop(stands)
+        elif self.gripper_state == "RETRACTING_DROP":
+            self.gripper_ext -= 0.05
+            if self.gripper_ext <= 0.0:
+                self.gripper_ext = 0.0
+                self.gripper_state = "IDLE"
 
         # Animasi Putar Carousel
         if self.carousel_angle < self.target_carousel_angle:
@@ -298,6 +311,12 @@ class SimRobot:
             self.gripper_state = "EXTENDING"
             self.gripper_ext = 0.0
 
+    def start_drop(self, slot_idx):
+        if self.gripper_state == "IDLE":
+            self.gripper_state = "EXTENDING_DROP"
+            self.gripper_ext = 0.0
+            self.drop_slot = slot_idx
+
     def perform_grab(self, stands):
         if not stands:
             return
@@ -311,9 +330,9 @@ class SimRobot:
         tip_x = self.orig_x + gripper_tip_dist * fd_x
         tip_y = self.orig_y + gripper_tip_dist * fd_y
         
-        # Cari stand terdekat (maksimal 120 mm)
+        # Cari stand terdekat (maksimal 180 mm — diperbesar karena collision boundary)
         best_stand = None
-        min_d = 120.0
+        min_d = 180.0
         for s in stands:
             if s["type"] == "H":
                 cx = s["x"] + 125
@@ -328,11 +347,51 @@ class SimRobot:
                 best_stand = s
                 
         if best_stand and best_stand["color"] is not None:
-            if len(self.storage) < 8:
-                cube_color = best_stand["color"]
-                best_stand["color"] = None
-                self.storage.append(cube_color)
-                self.target_carousel_angle += 45.0
+            for i in range(8):
+                if self.storage[i] is None:
+                    cube_color = best_stand["color"]
+                    best_stand["color"] = None
+                    self.storage[i] = cube_color
+                    self.last_grabbed_color = cube_color
+                    self.target_carousel_angle += 45.0
+                    break
+
+    def perform_drop(self, stands):
+        if not stands or self.drop_slot < 0 or self.drop_slot >= 8:
+            return
+            
+        # Arah hadap robot
+        fd_x = math.cos(self.angle)
+        fd_y = math.sin(self.angle)
+        
+        # Ujung gripper berjarak ROBOT_RADIUS + 35mm
+        gripper_tip_dist = self.ROBOT_RADIUS + 35.0
+        tip_x = self.orig_x + gripper_tip_dist * fd_x
+        tip_y = self.orig_y + gripper_tip_dist * fd_y
+        
+        # Cari stand terdekat
+        best_stand = None
+        min_d = 180.0
+        for s in stands:
+            if s["type"] == "H":
+                cx = s["x"] + 125
+                cy = s["y"]
+            else:
+                cx = s["x"]
+                cy = s["y"] + 105
+            
+            d = math.hypot(tip_x - cx, tip_y - cy)
+            if d < min_d:
+                min_d = d
+                best_stand = s
+                
+        if best_stand and best_stand["color"] is None:
+            # Pindahkan kubus dari storage ke stand
+            cube_color = self.storage[self.drop_slot]
+            if cube_color is not None:
+                self.storage[self.drop_slot] = None
+                best_stand["color"] = cube_color
+                self.target_carousel_angle -= 45.0
 
     def _cast_ray_pixel(self, raw_lapangan, ox, oy, dx, dy, max_dist=3000):
         """
@@ -432,8 +491,8 @@ class SimRobot:
             pygame.draw.line(surface, (120, 120, 120), (int(tip_x), int(tip_y)), (int(c_right_x), int(c_right_y)), 2)
             
             # Jika sedang menarik kubus (retracting) dan storage tidak kosong, gambarkan kubus dibawa cakar
-            if self.gripper_state == "RETRACTING" and self.storage:
-                last_color = self.storage[-1]
+            if self.gripper_state == "RETRACTING" and self.last_grabbed_color:
+                last_color = self.last_grabbed_color
                 if last_color == "RED":
                     c_val = (255, 0, 0)
                 elif last_color == "GREEN":
@@ -483,31 +542,42 @@ class SimRobot:
 
         # Gambar sekat/divider carousel
         for i in range(8):
-            angle_deg = self.carousel_angle + i * 45.0
+            angle_deg = self.carousel_angle - i * 45.0
             angle_rad = a + math.radians(angle_deg - 22.5)
             dx_div = sx + (hw * 0.55) * math.cos(angle_rad)
             dy_div = sy + (hw * 0.55) * math.sin(angle_rad)
             pygame.draw.line(surface, (60, 60, 80), (int(sx), int(sy)), (int(dx_div), int(dy_div)), 1)
 
+        if not hasattr(self, '_font'):
+            self._font = pygame.font.SysFont(None, int(12 * scale)) if pygame.font.get_init() else None
+
         # Gambar slot penampung & kubus di dalamnya
         for i in range(8):
-            angle_deg = self.carousel_angle + i * 45.0
+            angle_deg = self.carousel_angle - i * 45.0
             angle_rad = a + math.radians(angle_deg)
             slot_x = sx + (hw * 0.38) * math.cos(angle_rad)
             slot_y = sy + (hw * 0.38) * math.sin(angle_rad)
             
-            slot_color = (60, 60, 60) # default kosong (abu-abu gelap)
-            if i < len(self.storage):
-                if self.storage[i] == "RED":
-                    slot_color = (255, 0, 0)
-                elif self.storage[i] == "GREEN":
-                    slot_color = (0, 200, 0)
+            slot_color = (60, 60, 60)
+            if self.storage[i] is not None:
+                color_name = self.storage[i]
+                if color_name == "RED" or color_name == "R":
+                    slot_color = (220, 20, 60)
+                elif color_name == "GREEN" or color_name == "G":
+                    slot_color = (50, 205, 50)
                 else: # BLUE
                     slot_color = (0, 100, 255)
             
             # Gambar kompartemen slot
-            pygame.draw.circle(surface, slot_color, (int(slot_x), int(slot_y)), int(4 * scale) if int(4*scale) > 1 else 3)
-            pygame.draw.circle(surface, BLACK, (int(slot_x), int(slot_y)), int(4 * scale) if int(4*scale) > 1 else 3, 1)
+            radius_slot = int(8 * scale) if int(8 * scale) > 4 else 6
+            pygame.draw.circle(surface, slot_color, (int(slot_x), int(slot_y)), radius_slot)
+            pygame.draw.circle(surface, BLACK, (int(slot_x), int(slot_y)), radius_slot, 1)
+
+            # Tulis angka 1-8
+            if self._font:
+                text_surf = self._font.render(str(i + 1), True, (255, 255, 255))
+                text_rect = text_surf.get_rect(center=(int(slot_x), int(slot_y)))
+                surface.blit(text_surf, text_rect)
 
         # ----------------------------------------------------------------
         # 3b. Sensor IR DEPAN (magenta)

@@ -164,7 +164,8 @@ class SequenceGUI:
                 "find coordinate",
                 "reset coordinate",
                 "balance belakang kiri",
-                "ambil kubus"
+                "ambil kubus",
+                "taruh kubus"
             ],
             width=18
         )
@@ -241,6 +242,8 @@ class SequenceGUI:
 
         ttk.Button(btn_row, text="✏️ Edit",
                    command=self._load_step_for_editing).pack(side="left", fill="x", expand=True, padx=2)
+        ttk.Button(btn_row, text="📥 Insert",
+                   command=self._insert_step_to_draft).pack(side="left", fill="x", expand=True, padx=2)
         ttk.Button(btn_row, text="➖ Hapus",
                    command=self._delete_draft_step).pack(side="left",  fill="x", expand=True, padx=2)
         ttk.Button(btn_row, text="🗑️ Clear",
@@ -365,6 +368,50 @@ class SequenceGUI:
         self.lbl_sensor_r = ttk.Label(sensor_box, text="⬤ R", font=("Segoe UI", 12, "bold"), foreground="#888888")
         self.lbl_sensor_r.pack(side="left", padx=10)
 
+        # Card 6: Storage Kubus (counter + 8 slot warna)
+        card_storage = ttk.Frame(frame, relief="groove", padding=10)
+        card_storage.pack(side="left", expand=True, fill="both", padx=5, pady=5)
+        ttk.Label(card_storage, text="STORAGE KUBUS", font=("Segoe UI", 9, "bold"), foreground="#a29bb5").pack()
+        
+        self.lbl_storage_count = ttk.Label(card_storage, text="0 / 8", font=("Segoe UI", 14, "bold"), foreground="#ffffff")
+        self.lbl_storage_count.pack(pady=1)
+        
+        slots_box = ttk.Frame(card_storage)
+        slots_box.pack(pady=2)
+        self.lbl_storage_slots = []
+        for i in range(8):
+            char_num = chr(0x2776 + i)
+            slot_lbl = ttk.Label(slots_box, text=char_num, font=("Segoe UI", 12, "bold"), foreground="#333333", cursor="hand2")
+            slot_lbl.pack(side="left", padx=1)
+            slot_lbl.bind("<Button-1>", lambda e, idx=i: self._on_storage_slot_click(idx))
+            self.lbl_storage_slots.append(slot_lbl)
+
+    def _on_storage_slot_click(self, slot_idx):
+        mon = self.manager.active_step_info
+        if mon.get("status") == "RUNNING":
+            return  # Jangan izinkan edit saat sequence berjalan
+
+        # Dapatkan list warna saat ini, pad dengan "-" sampai 8 slot
+        current_colors = list(self.manager.storage_colors)
+        while len(current_colors) < 8:
+            current_colors.append("-")
+        
+        # Logic siklus warna: "-" -> "R" -> "G" -> "B" -> "-"
+        cycle = ["-", "R", "G", "B"]
+        current = current_colors[slot_idx]
+        if current not in cycle:
+            current = "-"
+        
+        next_idx = (cycle.index(current) + 1) % len(cycle)
+        current_colors[slot_idx] = cycle[next_idx]
+        
+        # Perbarui state GUI secara instan
+        self.manager.storage_colors = current_colors
+        self.manager.storage_count = sum(1 for c in current_colors if c != "-")
+        
+        # Kirim perintah update storage ke simulator
+        self.manager.set_storage_manual(current_colors)
+
     def _build_queue_panels(self, parent):
         paned = ttk.PanedWindow(parent, orient=tk.HORIZONTAL)
         paned.pack(fill="both", expand=True, padx=5, pady=5)
@@ -446,12 +493,26 @@ class SequenceGUI:
             sensors = self.manager.line_sensors
             self.lbl_sensor_l.config(foreground="#00ff00" if sensors.get("left", 0) else "#555555")
             self.lbl_sensor_r.config(foreground="#00ff00" if sensors.get("right", 0) else "#555555")
+
+            # Update storage counter dan slot indicators
+            s_count = self.manager.storage_count
+            s_colors = self.manager.storage_colors
+            self.lbl_storage_count.config(text=f"{s_count} / 8")
+            color_map = {"R": "#ff3333", "G": "#33cc33", "B": "#3388ff"}
+            for i, slot_lbl in enumerate(self.lbl_storage_slots):
+                if i < len(s_colors) and s_colors[i] in color_map:
+                    slot_lbl.config(foreground=color_map[s_colors[i]])
+                else:
+                    slot_lbl.config(foreground="#333333")
         else:
             for lbl in (self.lbl_tele_x, self.lbl_tele_y,
                         self.lbl_tele_w, self.lbl_tele_d):
                 lbl.config(text="---")
             self.lbl_sensor_l.config(foreground="#555555")
             self.lbl_sensor_r.config(foreground="#555555")
+            self.lbl_storage_count.config(text="- / 8")
+            for slot_lbl in self.lbl_storage_slots:
+                slot_lbl.config(foreground="#333333")
             self.lbl_status.config(
                 text="Status: Terputus dari Pygame. Jalankan simul_jalan.py...")
 
@@ -486,6 +547,12 @@ class SequenceGUI:
             elif "Sensor" in ltype or "Garis" in ltype:
                 state_str = "AKTIF" if cval > 0.5 else "Mencari..."
                 self.lbl_mon_limit.config(text=f"Garis: {state_str}")
+            elif "Ambil" in ltype or "Kubus" in ltype and "Taruh" not in ltype:
+                state_str = "Selesai ✓" if cval >= 1.0 else "Mengambil..."
+                self.lbl_mon_limit.config(text=f"Grab: {state_str} ({self.manager.storage_count}/8)")
+            elif "Taruh" in ltype or "Drop" in ltype:
+                state_str = "Selesai ✓" if cval >= 1.0 else "Menaruh..."
+                self.lbl_mon_limit.config(text=f"Drop: {state_str} ({self.manager.storage_count}/8)")
             else:
                 self.lbl_mon_limit.config(text=f"Progress: {cval:.1f} / {lval:.1f}")
         else:
@@ -549,6 +616,40 @@ class SequenceGUI:
         else:
             # Tambah langkah baru
             self.draft_steps.append(step_data)
+
+        self._refresh_draft_tree()
+        self.entry_step_name.set("local odometry")
+        self.entry_step_desc.delete(0, tk.END)
+
+    def _insert_step_to_draft(self):
+        sel = self.tree_draft.selection()
+        if not sel:
+            messagebox.showwarning("Peringatan", "Pilih langkah di draft sebagai posisi insert (langkah baru akan disisipkan sebelum pilihan)!")
+            return
+            
+        try:
+            nama  = self.entry_step_name.get()
+            vx    = float(self.spin_vx.get())
+            vy    = float(self.spin_vy.get())
+            vw_s  = self.spin_vw.get().strip()
+            vw    = float(vw_s) if vw_s else None
+            ltype = self.combo_limit_type.get()
+            lval  = float(self.entry_limit_val.get())
+            desc  = self.entry_step_desc.get().strip()
+        except ValueError:
+            messagebox.showerror("Error", "Vx, Vy, Vw (jika diisi), dan Nilai Limit harus angka!")
+            return
+
+        step_data = {
+            "nama": nama, "vx": vx, "vy": vy, "vw": vw, 
+            "limit_type": ltype, "limit_val": lval, "keterangan": desc
+        }
+
+        idx = self.tree_draft.index(sel[0])
+        self.draft_steps.insert(idx, step_data)
+        
+        if self.editing_draft_index is not None and self.editing_draft_index >= idx:
+            self.editing_draft_index += 1
 
         self._refresh_draft_tree()
         self.entry_step_name.set("local odometry")
