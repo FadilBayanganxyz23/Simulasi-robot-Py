@@ -35,29 +35,19 @@ class SequenceGUI:
         self.manager = SequenceManager(self)
 
         # ------------------------------------------------------------------
-        # Setup Background Image (Elysia)
+        # Setup Tema Monokrom (Tanpa Background Image)
         # ------------------------------------------------------------------
-        self.bg_image_path = "gui_background.jpg"
-        if os.path.exists(self.bg_image_path):
-            self.bg_img = Image.open(self.bg_image_path)
-            self.bg_photo = ImageTk.PhotoImage(self.bg_img.resize((1300, 680), Image.Resampling.LANCZOS))
-            self.bg_label = tk.Label(self.root, image=self.bg_photo)
-            self.bg_label.place(x=0, y=0, relwidth=1, relheight=1)
-            
-            # Bind configure event untuk dynamic scaling saat window di-resize
-            self.root.bind("<Configure>", self._resize_background)
-        else:
-            self.bg_label = None
+        self.bg_label = None
 
         # ------------------------------------------------------------------
-        # Terapkan Warna Dominan dari Elysia (Dark Space & Pink Theme)
+        # Terapkan Warna Dominan Monokrom
         # ------------------------------------------------------------------
-        BG_MAIN = "#0f0b18"     # Deep Space Violet-Black
-        BG_CARD = "#1c142c"     # Card Panel Deep Violet
-        BG_INPUT = "#271c3c"    # Input fields
+        BG_MAIN = "#121212"     # Dark gray/black
+        BG_CARD = "#1e1e1e"     # Card Panel Dark Gray
+        BG_INPUT = "#2d2d2d"    # Input fields
         TEXT_LIGHT = "#ffffff"  # White text
-        PINK = "#ff7ebb"        # Elysia Pink
-        CYAN = "#7ce6ff"        # Starlight Cyan
+        PINK = "#cccccc"        # Light gray for accents
+        CYAN = "#aaaaaa"        # Mid gray
         
         style = ttk.Style()
         style.theme_use("clam")
@@ -78,28 +68,28 @@ class SequenceGUI:
         style.configure("TEntry", fieldbackground=BG_INPUT, foreground=TEXT_LIGHT, insertcolor=TEXT_LIGHT)
         style.configure("TSpinbox", fieldbackground=BG_INPUT, foreground=TEXT_LIGHT, arrowcolor=TEXT_LIGHT)
         style.configure("TCombobox", fieldbackground=BG_INPUT, foreground=TEXT_LIGHT, arrowcolor=TEXT_LIGHT)
-        style.map("TCombobox", fieldbackground=[("readonly", BG_INPUT)], selectbackground=[("readonly", "#3f2d60")])
+        style.map("TCombobox", fieldbackground=[("readonly", BG_INPUT)], selectbackground=[("readonly", "#444444")])
         
         # Tables (Treeview)
         style.configure("Treeview", background=BG_INPUT, fieldbackground=BG_INPUT, foreground=TEXT_LIGHT, rowheight=24)
-        style.configure("Treeview.Heading", background="#3f2d60", foreground=TEXT_LIGHT, font=("Segoe UI", 10, "bold"))
-        style.map("Treeview", background=[("selected", "#563e80")])
+        style.configure("Treeview.Heading", background="#333333", foreground=TEXT_LIGHT, font=("Segoe UI", 10, "bold"))
+        style.map("Treeview", background=[("selected", "#555555")])
         
         # Buttons
-        style.configure("TButton", background="#3f2d60", foreground=TEXT_LIGHT, font=("Segoe UI", 10, "bold"), padding=6)
+        style.configure("TButton", background="#333333", foreground=TEXT_LIGHT, font=("Segoe UI", 10, "bold"), padding=6)
         style.map("TButton",
-                  background=[("active", "#563e80"), ("disabled", "#1d142c")],
+                  background=[("active", "#555555"), ("disabled", "#111111")],
                   foreground=[("active", TEXT_LIGHT), ("disabled", "#666666")])
                   
         # Accent/Action Buttons
         style.configure("Accent.TButton", background=PINK, foreground=BG_MAIN, font=("Segoe UI", 10, "bold"))
         style.map("Accent.TButton",
-                  background=[("active", "#ff9ec9")],
+                  background=[("active", "#eeeeee")],
                   foreground=[("active", BG_MAIN)])
                   
-        style.configure("Stop.TButton", background="#ff4d6d", foreground=TEXT_LIGHT, font=("Segoe UI", 10, "bold"))
+        style.configure("Stop.TButton", background="#444444", foreground=TEXT_LIGHT, font=("Segoe UI", 10, "bold"))
         style.map("Stop.TButton",
-                  background=[("active", "#ff708d")],
+                  background=[("active", "#666666")],
                   foreground=[("active", TEXT_LIGHT)])
 
         # State UI
@@ -124,12 +114,7 @@ class SequenceGUI:
         self._build_left_panel(parent)
         self._build_right_panel(parent)
 
-        # Status bar tetap di bagian paling bawah window utama
-        self.lbl_status = ttk.Label(
-            self.root, text="Status: Menghubungkan ke Pygame...",
-            relief="sunken", anchor="w", foreground="#ffffff"
-        )
-        self.lbl_status.pack(fill="x", side="bottom")
+        # (Status bar dipindahkan ke panel kiri)
 
     # ---- Panel Kiri --------------------------------------------------
 
@@ -139,6 +124,12 @@ class SequenceGUI:
 
         self._build_creator_frame(self.left_panel)
         self._build_notes_frame(self.left_panel)
+        
+        self.lbl_status = ttk.Label(
+            self.left_panel, text="Status: Menghubungkan ke Pygame...",
+            anchor="w", foreground="#aaaaaa"
+        )
+        self.lbl_status.pack(side="bottom", fill="x", pady=(5,0))
 
     def _build_creator_frame(self, parent):
         """Frame pembuat kombinasi kustom."""
@@ -939,13 +930,6 @@ class SequenceGUI:
         self.root.destroy()
         os._exit(0)
 
-    def _resize_background(self, event):
-        if event.widget == self.root:
-            w = event.width
-            h = event.height
-            if w > 10 and h > 10:
-                resized_img = self.bg_img.resize((w, h), Image.Resampling.LANCZOS)
-                self.bg_photo = ImageTk.PhotoImage(resized_img)
-                self.bg_label.config(image=self.bg_photo)
+
 
 

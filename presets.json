@@ -185,16 +185,25 @@
             "nama": "find coordinate",
             "vx": -590.0,
             "vy": 290.0,
-            "vw": 268.0,
+            "vw": 0.0,
             "limit_type": "Sensor Garis",
             "limit_val": 0.0,
             "keterangan": ""
         },
         {
-            "nama": "balance belakang kiri",
+            "nama": "balance depan kiri",
             "vx": 0.0,
             "vy": 0.0,
             "vw": 0.0,
+            "limit_type": "Sensor Garis",
+            "limit_val": 0.0,
+            "keterangan": ""
+        },
+        {
+            "nama": "rotasi",
+            "vx": 0.0,
+            "vy": 0.0,
+            "vw": 268.0,
             "limit_type": "Sensor Garis",
             "limit_val": 0.0,
             "keterangan": ""
@@ -214,16 +223,25 @@
             "nama": "find coordinate",
             "vx": -754.0,
             "vy": -531.0,
-            "vw": 90.0,
+            "vw": 180.0,
             "limit_type": "Waktu (s)",
             "limit_val": 2.0,
             "keterangan": ""
         },
         {
-            "nama": "balance belakang kiri",
+            "nama": "balance depan kiri",
             "vx": 0.0,
             "vy": 0.0,
             "vw": 0.0,
+            "limit_type": "Waktu (s)",
+            "limit_val": 2.0,
+            "keterangan": ""
+        },
+        {
+            "nama": "rotasi",
+            "vx": 0.0,
+            "vy": 0.0,
+            "vw": 88.0,
             "limit_type": "Waktu (s)",
             "limit_val": 2.0,
             "keterangan": ""
@@ -232,7 +250,7 @@
     "MOVE P2": [
         {
             "nama": "find coordinate",
-            "vx": -690.0,
+            "vx": -897.0,
             "vy": -521.0,
             "vw": 90.0,
             "limit_type": "Waktu (s)",
@@ -259,7 +277,7 @@
         },
         {
             "nama": "find coordinate",
-            "vx": -690.0,
+            "vx": -897.0,
             "vy": -521.0,
             "vw": 90.0,
             "limit_type": "Sensor Garis",
@@ -286,7 +304,7 @@
         },
         {
             "nama": "find coordinate",
-            "vx": -534.0,
+            "vx": -729.0,
             "vy": -521.0,
             "vw": 90.0,
             "limit_type": "Sensor Garis",

@@ -386,23 +386,21 @@ class SequenceManager:
                         continue
 
                     # ---- Balance Baru ----
+                    is_balance = False
                     if "balance depan kiri" in nama_lower or "balance_depan_kiri" in nama_lower:
-                        self.active_step_info["limit_type"] = "Balancing"
-                        self.active_step_info["limit_val"] = 100.0
-                        self.active_step_info["current_val"] = 0.0
                         self.send_command("BALANCE_DEPAN_KIRI")
-
+                        is_balance = True
                     elif "balance depan" in nama_lower or "balance_depan" in nama_lower:
-                        self.active_step_info["limit_type"] = "Balancing"
-                        self.active_step_info["limit_val"] = 100.0
-                        self.active_step_info["current_val"] = 0.0
                         self.send_command("BALANCE_DEPAN")
-
+                        is_balance = True
                     elif "balance kiri" in nama_lower or "balance_kiri" in nama_lower:
+                        self.send_command("BALANCE_KIRI")
+                        is_balance = True
+
+                    if is_balance:
                         self.active_step_info["limit_type"] = "Balancing"
                         self.active_step_info["limit_val"] = 100.0
                         self.active_step_info["current_val"] = 0.0
-                        self.send_command("BALANCE_KIRI")
 
                         # Tunggu simulator konfirmasi balance MULAI (max 1 detik)
                         wait_start = time.time()
@@ -411,11 +409,11 @@ class SequenceManager:
                             if time.time() - wait_start > 1.0:
                                 break
 
-                        # Tunggu balance SELESAI (max 15 detik)
+                        # Tunggu balance SELESAI (max 3 detik)
                         wait_start = time.time()
                         while self.running_sequence and self.robot_balancing:
                             time.sleep(0.05)
-                            if time.time() - wait_start > 15.0:
+                            if time.time() - wait_start > 3.0:
                                 break
 
                         time.sleep(0.15)   # jeda singkat agar odometri terkalibrasi

@@ -212,10 +212,7 @@ def update_balance(robot, bst, raw_lapangan):
         bst["active"] = False
         return 0.0, 0.0, 0.0, True
 
-    # Konversi local -> global simulator
-    ext_vy = vx_local * cos_a - vy_local * sin_a
-    ext_vx = -vx_local * sin_a - vy_local * cos_a
-    return ext_vx, ext_vy, vw, False
+    return vx_local, vy_local, vw, False
 
 
 # ---------------------------------------------------------------------------
@@ -382,6 +379,8 @@ while running:
                         robot.carousel_angle = 0.0
                         robot.target_carousel_angle = 0.0
                         robot.last_grabbed_color = None
+                        grab_sequence_state["active"] = False
+                        drop_sequence_state["active"] = False
 
                     elif parts[0] == "RESET_ODOM":
                         origin_x     = robot.orig_x
@@ -763,7 +762,7 @@ while running:
             use_ext_control = False
             robot.update(keys, raw_lapangan, stands=stands)
         else:
-            robot.update(keys, raw_lapangan, bal_vx, bal_vy, bal_vw, use_ext=True, stands=stands)
+            robot.update(keys, raw_lapangan, bal_vx, bal_vy, bal_vw, use_ext=True, is_local=True, stands=stands)
     elif nav_state["is_navigating"]:
         robot.update(keys, raw_lapangan, nav_vx, nav_vy, nav_vw, use_ext=True, stands=stands)
     elif use_ext_control:
