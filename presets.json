@@ -340,5 +340,25 @@
             "limit_val": 2.0,
             "keterangan": ""
         }
+    ],
+    "tes": [
+        {
+            "nama": "balance kiri",
+            "vx": 20.0,
+            "vy": 0.0,
+            "vw": null,
+            "limit_type": "Sensor Jarak Depan (mm)",
+            "limit_val": 100.0,
+            "keterangan": ""
+        },
+        {
+            "nama": "pwm",
+            "vx": 0.0,
+            "vy": 0.0,
+            "vw": 10.0,
+            "limit_type": "Sudut (\u00b0)",
+            "limit_val": 180.0,
+            "keterangan": ""
+        }
     ]
 }

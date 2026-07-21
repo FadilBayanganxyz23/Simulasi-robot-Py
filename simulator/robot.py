@@ -447,11 +447,10 @@ class SimRobot:
             if px < 0 or px >= orig_w or py < 0 or py >= orig_h:
                 return dist
 
-            # Cek pixel lapangan: gelap + bukan area crossable + bukan slider box = tembok
-            if (not is_pixel_crossable(px, py)
-                    and not is_in_slider_box(px, py)
-                    and raw_lapangan.get_at((px, py))[0] < 100):
-                return dist
+            # Cek pixel lapangan: gelap + bukan area crossable ATAU di dalam slider box = tembok
+            if not is_pixel_crossable(px, py):
+                if is_in_slider_box(px, py) or raw_lapangan.get_at((px, py))[0] < 100:
+                    return dist
 
             dist += STEP
 

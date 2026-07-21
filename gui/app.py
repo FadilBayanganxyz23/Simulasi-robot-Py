@@ -14,10 +14,323 @@ from tkinter import ttk, messagebox
 import threading
 import math
 import os
+import socket
+import base64
+import numpy as np
+import cv2
 from PIL import Image, ImageTk
 
 from gui.logic import SequenceManager
 
+class CameraWindow(tk.Toplevel):
+    def __init__(self, master, on_close):
+        super().__init__(master)
+        self.title("Live Camera FPV & HSV Calibration")
+        self.protocol("WM_DELETE_WINDOW", self._on_close)
+        self.on_close = on_close
+        
+        self.running = True
+        
+        # Default HSV Ranges (OpenCV format)
+        self.hsv_ranges = {
+            "RED": {"h": [0, 10], "s": [100, 255], "v": [100, 255]},
+            "GREEN": {"h": [40, 80], "s": [100, 255], "v": [100, 255]},
+            "BLUE": {"h": [100, 140], "s": [100, 255], "v": [100, 255]}
+        }
+        
+        try:
+            import json
+            with open("hsv_calibration.json", "r") as f:
+                loaded = json.load(f)
+                # Soft update to prevent key errors
+                for k, v in loaded.items():
+                    if k in self.hsv_ranges:
+                        self.hsv_ranges[k].update(v)
+        except Exception:
+            pass
+            
+        
+        self._build_ui()
+        
+        self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.sock.settimeout(2.0)
+        try:
+            self.sock.connect(('127.0.0.1', 5006))
+        except Exception as e:
+            print("Gagal connect ke Camera Server", e)
+        
+        self.thread = threading.Thread(target=self._recv_loop, daemon=True)
+        self.thread.start()
+
+    def _build_ui(self):
+        main_frame = ttk.Frame(self)
+        main_frame.pack(fill="both", expand=True, padx=10, pady=10)
+        
+        # Left: Video
+        left = ttk.Frame(main_frame)
+        left.pack(side="left", fill="both", expand=True)
+        
+        self.lbl_video = ttk.Label(left, text="No Signal", background="black", foreground="white", anchor="center")
+        self.lbl_video.pack(fill="both", expand=True)
+        
+        self.lbl_video.bind("<ButtonPress-1>", self._on_mouse_press)
+        self.lbl_video.bind("<B1-Motion>", self._on_mouse_drag)
+        self.lbl_video.bind("<ButtonRelease-1>", self._on_mouse_release)
+        
+        self.drag_start = None
+        self.drag_end = None
+        self.selection_box = (90, 90, 110, 110)
+        
+        self.lbl_result = ttk.Label(left, text="DETECTED: -", font=("Segoe UI", 14, "bold"))
+        self.lbl_result.pack(pady=5)
+        
+        # Right: Sliders
+        right = ttk.Frame(main_frame)
+        right.pack(side="right", fill="y", padx=10)
+        
+        def _add_sliders(parent, color_name):
+            f = ttk.LabelFrame(parent, text=color_name)
+            f.pack(fill="x", pady=5)
+            
+            vars_dict = {}
+            for channel in ["h", "s", "v"]:
+                row = ttk.Frame(f)
+                row.pack(fill="x")
+                ttk.Label(row, text=channel.upper(), width=2).pack(side="left")
+                
+                v_min = tk.IntVar(value=self.hsv_ranges[color_name][channel][0])
+                v_max = tk.IntVar(value=self.hsv_ranges[color_name][channel][1])
+                vars_dict[channel] = (v_min, v_max)
+                
+                max_val = 179 if channel == "h" else 255
+                
+                # We use command to update values in real-time while sliding
+                def make_cmd(c=color_name, ch=channel, vmin=v_min, vmax=v_max):
+                    def cmd(val):
+                        self.hsv_ranges[c][ch] = [vmin.get(), vmax.get()]
+                        try:
+                            import json
+                            with open("hsv_calibration.json", "w") as f:
+                                json.dump(self.hsv_ranges, f)
+                        except:
+                            pass
+                    return cmd
+
+                s_min = ttk.Scale(row, from_=0, to=max_val, variable=v_min, orient="horizontal", length=80, command=make_cmd())
+                s_min.pack(side="left", padx=2)
+                s_max = ttk.Scale(row, from_=0, to=max_val, variable=v_max, orient="horizontal", length=80, command=make_cmd())
+                s_max.pack(side="left", padx=2)
+                
+            btn = ttk.Button(f, text=f"Auto Sample", command=lambda c=color_name, vd=vars_dict: self._auto_calibrate(c, vd))
+            btn.pack(fill="x", padx=5, pady=5)
+                
+        _add_sliders(right, "RED")
+        _add_sliders(right, "GREEN")
+        _add_sliders(right, "BLUE")
+        
+    def _recv_loop(self):
+        buffer = ""
+        while self.running:
+            try:
+                data = self.sock.recv(16384).decode('ascii')
+                if not data:
+                    raise Exception("Disconnected")
+                buffer += data
+                while "\n" in buffer:
+                    line, buffer = buffer.split("\n", 1)
+                    if line:
+                        self._process_frame(line)
+            except socket.timeout:
+                continue
+            except Exception as e:
+                # Coba reconnect
+                try: self.sock.close()
+                except: pass
+                
+                self.lbl_video.after(0, lambda: self.lbl_video.config(image='', text="No Signal"))
+                self.lbl_result.after(0, lambda: self.lbl_result.config(text="DETECTED: -"))
+                
+                import time
+                time.sleep(1.0)
+                
+                if not self.running:
+                    break
+                    
+                try:
+                    self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                    self.sock.settimeout(2.0)
+                    self.sock.connect(('127.0.0.1', 5006))
+                    buffer = ""
+                except:
+                    pass
+                
+    def _process_frame(self, b64_str):
+        try:
+            img_data = base64.b64decode(b64_str)
+            np_arr = np.frombuffer(img_data, np.uint8)
+            img = cv2.imdecode(np_arr, cv2.IMREAD_COLOR) # BGR
+            if img is None:
+                return
+            
+            # Resize internal for faster processing (optional, already 200x200)
+            hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
+            
+            # Simpan sample untuk auto calibration dari selection_box
+            x1, y1, x2, y2 = self.selection_box
+            self.current_hsv_sample = hsv[y1:y2, x1:x2].copy()
+            
+            detected = "-"
+            detected_color = (0, 0, 0)
+            
+            detected_list = []
+            
+            for cname, ranges in self.hsv_ranges.items():
+                # Allow wrap-around for RED Hue (e.g. 170-10)
+                h_min, h_max = ranges["h"]
+                s_min, s_max = ranges["s"]
+                v_min, v_max = ranges["v"]
+                
+                if h_min > h_max:
+                    # Red wrap-around
+                    lower1 = np.array([h_min, s_min, v_min])
+                    upper1 = np.array([179, s_max, v_max])
+                    mask1 = cv2.inRange(hsv, lower1, upper1)
+                    
+                    lower2 = np.array([0, s_min, v_min])
+                    upper2 = np.array([h_max, s_max, v_max])
+                    mask2 = cv2.inRange(hsv, lower2, upper2)
+                    mask = cv2.bitwise_or(mask1, mask2)
+                else:
+                    lower = np.array([h_min, s_min, v_min])
+                    upper = np.array([h_max, s_max, v_max])
+                    mask = cv2.inRange(hsv, lower, upper)
+                
+                contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+                for cnt in contours:
+                    area = cv2.contourArea(cnt)
+                    if area > 100:
+                        rect = cv2.boundingRect(cnt)
+                        if cname == "RED": color = (0, 0, 255)
+                        elif cname == "GREEN": color = (0, 255, 0)
+                        else: color = (255, 0, 0)
+                        
+                        x, y, w, h = rect
+                        cv2.rectangle(img, (x, y), (x+w, y+h), color, 2)
+                        cv2.putText(img, cname, (x, y-5), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1)
+                        if cname not in detected_list:
+                            detected_list.append(cname)
+                            
+            detected = ", ".join(detected_list) if detected_list else "-"
+                
+            # Gambar crosshair/box target untuk auto sampling
+            cv2.rectangle(img, (x1, y1), (x2, y2), (255, 255, 255), 1)
+                
+            img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+            pil_img = Image.fromarray(img_rgb)
+            # Make it bigger for the UI
+            pil_img = pil_img.resize((300, 300), Image.NEAREST)
+            self.tk_img = ImageTk.PhotoImage(image=pil_img)
+            
+            self.lbl_video.after(0, self._update_image, detected)
+        except Exception as e:
+            pass
+            
+    def _update_image(self, detected):
+        try:
+            if hasattr(self, 'tk_img'):
+                self.lbl_video.config(image=self.tk_img)
+            self.lbl_result.config(text=f"DETECTED: {detected}")
+        except Exception:
+            pass
+            
+    def _on_mouse_press(self, event):
+        self.drag_start = (event.x, event.y)
+        self.drag_end = (event.x, event.y)
+
+    def _on_mouse_drag(self, event):
+        self.drag_end = (event.x, event.y)
+        self._update_selection_box()
+
+    def _on_mouse_release(self, event):
+        self.drag_end = (event.x, event.y)
+        self._update_selection_box()
+        self.drag_start = None
+        self.drag_end = None
+        
+    def _update_selection_box(self):
+        if self.drag_start and self.drag_end:
+            lw = self.lbl_video.winfo_width()
+            lh = self.lbl_video.winfo_height()
+            
+            img_x = (lw - 300) // 2
+            img_y = (lh - 300) // 2
+            
+            x1_ui = self.drag_start[0] - img_x
+            y1_ui = self.drag_start[1] - img_y
+            x2_ui = self.drag_end[0] - img_x
+            y2_ui = self.drag_end[1] - img_y
+            
+            x1 = int(min(x1_ui, x2_ui) * 200 / 300)
+            y1 = int(min(y1_ui, y2_ui) * 200 / 300)
+            x2 = int(max(x1_ui, x2_ui) * 200 / 300)
+            y2 = int(max(y1_ui, y2_ui) * 200 / 300)
+            
+            x1 = max(0, min(198, x1))
+            y1 = max(0, min(198, y1))
+            x2 = max(x1+2, min(200, x2))
+            y2 = max(y1+2, min(200, y2))
+            
+            self.selection_box = (x1, y1, x2, y2)
+
+    def _auto_calibrate(self, color_name, vars_dict):
+        if getattr(self, 'current_hsv_sample', None) is None:
+            return
+            
+        sample = self.current_hsv_sample
+        h_vals = sample[:,:,0].flatten()
+        s_vals = sample[:,:,1].flatten()
+        v_vals = sample[:,:,2].flatten()
+        
+        s_min = max(0, int(np.percentile(s_vals, 5)) - 30)
+        s_max = min(255, int(np.percentile(s_vals, 95)) + 30)
+        v_min = max(0, int(np.percentile(v_vals, 5)) - 30)
+        v_max = min(255, int(np.percentile(v_vals, 95)) + 30)
+        
+        if np.max(h_vals) - np.min(h_vals) > 90:
+            high_vals = h_vals[h_vals > 90]
+            low_vals = h_vals[h_vals <= 90]
+            h_min = max(0, int(np.percentile(high_vals, 5)) - 10) if len(high_vals) > 0 else 0
+            h_max = min(179, int(np.percentile(low_vals, 95)) + 10) if len(low_vals) > 0 else 179
+        else:
+            h_min = max(0, int(np.percentile(h_vals, 5)) - 10)
+            h_max = min(179, int(np.percentile(h_vals, 95)) + 10)
+            
+        vars_dict["h"][0].set(h_min)
+        vars_dict["h"][1].set(h_max)
+        vars_dict["s"][0].set(s_min)
+        vars_dict["s"][1].set(s_max)
+        vars_dict["v"][0].set(v_min)
+        vars_dict["v"][1].set(v_max)
+        
+        self.hsv_ranges[color_name]["h"] = [h_min, h_max]
+        self.hsv_ranges[color_name]["s"] = [s_min, s_max]
+        self.hsv_ranges[color_name]["v"] = [v_min, v_max]
+        
+        try:
+            import json
+            with open("hsv_calibration.json", "w") as f:
+                json.dump(self.hsv_ranges, f)
+        except Exception:
+            pass
+
+    def _on_close(self):
+        self.running = False
+        try:
+            self.sock.close()
+        except:
+            pass
+        self.on_close()
+        self.destroy()
 
 class SequenceGUI:
     """
@@ -183,8 +496,8 @@ class SequenceGUI:
         # Row 2: Limit Type, Limit Val
         ttk.Label(inputs_frame, text="Limit:").grid(row=2, column=0, sticky="w", padx=2, pady=2)
         self.combo_limit_type = ttk.Combobox(
-            inputs_frame, values=["Waktu (s)", "Jarak (px)", "Sudut (°)", "Sensor Garis"],
-            state="readonly", width=10
+            inputs_frame, values=["Waktu (s)", "Jarak (px)", "Sudut (°)", "Sensor Garis", "Sensor Jarak Depan (mm)", "Sensor Jarak Kiri (mm)"],
+            state="readonly", width=19
         )
         self.combo_limit_type.current(0)
         self.combo_limit_type.grid(row=2, column=1, columnspan=2, sticky="ew", padx=2, pady=2)
@@ -334,21 +647,43 @@ class SequenceGUI:
         frame = ttk.LabelFrame(parent, text=" 📡 Live Telemetry & Odometry Dashboard ")
         frame.pack(fill="x", padx=5, pady=5)
 
-        def _card(label_text, value_text, fg):
-            card = ttk.Frame(frame, relief="groove", padding=10)
+        row1 = ttk.Frame(frame)
+        row1.pack(fill="x")
+        
+        def _card(parent_frame, label_text, value_text, fg):
+            card = ttk.Frame(parent_frame, relief="groove", padding=10)
             card.pack(side="left", expand=True, fill="both", padx=5, pady=5)
             ttk.Label(card, text=label_text, font=("Segoe UI", 9, "bold"), foreground="#a29bb5").pack()
             lbl = ttk.Label(card, text=value_text, font=("Segoe UI", 16, "bold"), foreground=fg)
             lbl.pack(pady=2)
             return lbl
 
-        self.lbl_tele_x = _card("KOORDINAT X",        "0.0 cm",  "#ffffff")
-        self.lbl_tele_y = _card("KOORDINAT Y",        "0.0 cm",  "#ffffff")
-        self.lbl_tele_w = _card("ARAH HADAP (HEADING)", "0°",    "#ffffff")
-        self.lbl_tele_d = _card("JARAK TEMPUH",       "0.00 m",  "#ffffff")
+        self.lbl_tele_x = _card(row1, "KOORDINAT X",        "0.0 cm",  "#ffffff")
+        self.lbl_tele_y = _card(row1, "KOORDINAT Y",        "0.0 cm",  "#ffffff")
+        self.lbl_tele_w = _card(row1, "ARAH HADAP (HEADING)", "0°",    "#ffffff")
+        self.lbl_tele_d = _card(row1, "JARAK TEMPUH",       "0.00 m",  "#ffffff")
+
+        row2 = ttk.Frame(frame)
+        row2.pack(fill="x")
+        
+        self.lbl_tele_dx = _card(row2, "TEMP. X (STEP)", "0.0 mm", "#aaffaa")
+        self.lbl_tele_dy = _card(row2, "TEMP. Y (STEP)", "0.0 mm", "#aaffaa")
+        self.lbl_tele_dw = _card(row2, "TEMP. W (STEP)", "0.0°",     "#aaffaa")
+
+        row3 = ttk.Frame(frame)
+        row3.pack(fill="x")
+
+        # Card: Camera
+        card_camera = ttk.Frame(row3, relief="groove", padding=10)
+        card_camera.pack(side="left", expand=True, fill="both", padx=5, pady=5)
+        ttk.Label(card_camera, text="VISION CAMERA", font=("Segoe UI", 9, "bold"), foreground="#a29bb5").pack()
+        
+        self.btn_camera = ttk.Button(card_camera, text="📷 Buka Kamera", command=self._toggle_camera)
+        self.btn_camera.pack(pady=10)
+        self.camera_window = None
 
         # Card 5: Line Sensors
-        card_sensor = ttk.Frame(frame, relief="groove", padding=10)
+        card_sensor = ttk.Frame(row3, relief="groove", padding=10)
         card_sensor.pack(side="left", expand=True, fill="both", padx=5, pady=5)
         ttk.Label(card_sensor, text="SENSOR GARIS", font=("Segoe UI", 9, "bold"), foreground="#a29bb5").pack()
         
@@ -362,7 +697,7 @@ class SequenceGUI:
         self.lbl_sensor_r.pack(side="left", padx=10)
 
         # Card 6: Storage Kubus (counter + 8 slot warna)
-        card_storage = ttk.Frame(frame, relief="groove", padding=10)
+        card_storage = ttk.Frame(row3, relief="groove", padding=10)
         card_storage.pack(side="left", expand=True, fill="both", padx=5, pady=5)
         ttk.Label(card_storage, text="STORAGE KUBUS", font=("Segoe UI", 9, "bold"), foreground="#a29bb5").pack()
         
@@ -382,6 +717,17 @@ class SequenceGUI:
             slot_lbl.pack(side="left", padx=1)
             slot_lbl.bind("<Button-1>", lambda e, idx=i: self._on_storage_slot_click(idx))
             self.lbl_storage_slots.append(slot_lbl)
+
+    def _toggle_camera(self):
+        if self.camera_window is None or not self.camera_window.winfo_exists():
+            self.camera_window = CameraWindow(self.root, self._on_camera_close)
+            self.btn_camera.config(text="📷 Tutup Kamera")
+        else:
+            self.camera_window._on_close()
+
+    def _on_camera_close(self):
+        self.camera_window = None
+        self.btn_camera.config(text="📷 Buka Kamera")
 
     def _on_storage_slot_click(self, slot_idx):
         mon = self.manager.active_step_info
@@ -490,6 +836,18 @@ class SequenceGUI:
             self.lbl_tele_y.config(text=f"{x_cm:+.1f} cm")
             self.lbl_tele_w.config(text=f"{deg:.0f}°")
             self.lbl_tele_d.config(text=f"{dist:.2f} m")
+
+            # Use local accumulated distance for the current step
+            step_info = self.manager.active_step_info
+            
+            dx_mm = step_info.get("temp_x", 0.0)
+            dy_mm = step_info.get("temp_y", 0.0)
+            dw_deg = step_info.get("temp_w", 0.0)
+
+            self.lbl_tele_dx.config(text=f"{dx_mm:+.1f} mm")
+            self.lbl_tele_dy.config(text=f"{dy_mm:+.1f} mm")
+            self.lbl_tele_dw.config(text=f"{dw_deg:+.1f}°")
+
             self.lbl_status.config(text="Status: Terhubung ke Pygame | Telemetri terupdate.")
 
             # Update line sensor indicators
@@ -509,7 +867,8 @@ class SequenceGUI:
                     slot_lbl.config(foreground="#333333")
         else:
             for lbl in (self.lbl_tele_x, self.lbl_tele_y,
-                        self.lbl_tele_w, self.lbl_tele_d):
+                        self.lbl_tele_w, self.lbl_tele_d,
+                        self.lbl_tele_dx, self.lbl_tele_dy, self.lbl_tele_dw):
                 lbl.config(text="---")
             self.lbl_sensor_l.config(foreground="#555555")
             self.lbl_sensor_r.config(foreground="#555555")

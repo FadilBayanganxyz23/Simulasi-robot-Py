@@ -41,6 +41,8 @@ class SequenceManager:
         self.storage_colors   = ["-"] * 8      # List warna kubus: ["R", "G", "B", ...] atau "-"
         self.line_sensors     = {"left": 0, "right": 0}
         self.line_latch       = False
+        self.robot_front_dist = 1500.0
+        self.robot_left_dist  = 1500.0
         self.active_step_info = {
             "status": "IDLE",
             "kombinasi": "-",
@@ -142,6 +144,18 @@ class SequenceManager:
                             self.robot_grabbing = (int(parts[10]) == 1)
                         else:
                             self.robot_grabbing = False
+                        
+                        # Kolom 15: front_dist
+                        if len(parts) >= 15:
+                            self.robot_front_dist = float(parts[14])
+                        else:
+                            self.robot_front_dist = 1500.0
+                            
+                        # Kolom 16: left_dist
+                        if len(parts) >= 16:
+                            self.robot_left_dist = float(parts[15])
+                        else:
+                            self.robot_left_dist = 1500.0
                         
                         # Kolom 12: storage_count (jumlah kubus)
                         if len(parts) >= 12:
@@ -245,9 +259,16 @@ class SequenceManager:
                         continue
 
                     nama_lower = gerak["nama"].lower()
+                    self.active_step_info["start_x"] = self.robot_pos.get("x", 0)
+                    self.active_step_info["start_y"] = self.robot_pos.get("y", 0)
+                    self.active_step_info["start_angle"] = self.robot_pos.get("angle", 0)
                     self.active_step_info["nama"] = gerak["nama"]
                     self.active_step_info["step_idx"] = idx_s
                     self.active_step_info["step_total"] = step_total
+
+                    self.active_step_info["temp_x"] = 0.0
+                    self.active_step_info["temp_y"] = 0.0
+                    self.active_step_info["temp_w"] = 0.0
 
                     # ---- Reset Odometry / Reset Coordinate ----
                     if (nama_lower.startswith("reset odometry") or
@@ -319,32 +340,7 @@ class SequenceManager:
                         time.sleep(0.15)
                         continue
 
-                    # ---- PWM Command (Maju/Mundur & Geser K/K, batas Sensor Garis) ----
-                    if "pwm" in nama_lower:
-                        self.line_latch = False  # Reset latch
-                        send_vx = float(gerak["vx"])
-                        send_vy = float(gerak["vy"])
-                        send_vw = float(gerak["vw"]) if gerak.get("vw") is not None else 0.0
 
-                        self.active_step_info["limit_type"] = "Sensor Garis"
-                        self.active_step_info["limit_val"] = 1.0
-                        self.active_step_info["current_val"] = 0.0
-
-                        # Kirim perintah VEL_LOCAL (bypass konversi koordinat global di simulator)
-                        self.send_command(f"VEL_LOCAL {send_vx} {send_vy} {send_vw}")
-
-                        while self.running_sequence:
-                            time.sleep(0.01)
-                            # Logika salah satu sensor garis aktif (bernilai 1) atau latch aktif
-                            has_line = self.line_latch or (self.line_sensors["left"] == 1 or self.line_sensors["right"] == 1)
-                            self.active_step_info["current_val"] = 1.0 if has_line else 0.0
-
-                            if has_line:
-                                break
-
-                        self.send_command("VEL 0 0 0")
-                        time.sleep(0.15)
-                        continue
 
                     # ---- Rotasi (menuju sudut heading tertentu via NAV) ----
                     if (nama_lower.startswith("rotasi") or
@@ -385,39 +381,17 @@ class SequenceManager:
                         time.sleep(0.15)
                         continue
 
-                    # ---- Balance Baru ----
-                    is_balance = False
+                    # Menentukan command pergerakan (bisa VEL biasa atau BALANCE)
                     if "balance depan kiri" in nama_lower or "balance_depan_kiri" in nama_lower:
-                        self.send_command("BALANCE_DEPAN_KIRI")
-                        is_balance = True
+                        cmd_prefix = "BALANCE_DEPAN_KIRI"
                     elif "balance depan" in nama_lower or "balance_depan" in nama_lower:
-                        self.send_command("BALANCE_DEPAN")
-                        is_balance = True
+                        cmd_prefix = "BALANCE_DEPAN"
                     elif "balance kiri" in nama_lower or "balance_kiri" in nama_lower:
-                        self.send_command("BALANCE_KIRI")
-                        is_balance = True
-
-                    if is_balance:
-                        self.active_step_info["limit_type"] = "Balancing"
-                        self.active_step_info["limit_val"] = 100.0
-                        self.active_step_info["current_val"] = 0.0
-
-                        # Tunggu simulator konfirmasi balance MULAI (max 1 detik)
-                        wait_start = time.time()
-                        while self.running_sequence and not self.robot_balancing:
-                            time.sleep(0.05)
-                            if time.time() - wait_start > 1.0:
-                                break
-
-                        # Tunggu balance SELESAI (max 3 detik)
-                        wait_start = time.time()
-                        while self.running_sequence and self.robot_balancing:
-                            time.sleep(0.05)
-                            if time.time() - wait_start > 3.0:
-                                break
-
-                        time.sleep(0.15)   # jeda singkat agar odometri terkalibrasi
-                        continue
+                        cmd_prefix = "BALANCE_KIRI"
+                    elif "pwm" in nama_lower:
+                        cmd_prefix = "VEL_LOCAL"
+                    else:
+                        cmd_prefix = "VEL"
                     is_find_coord  = (nama_lower.startswith("find coordinate") or
                                       nama_lower.startswith("find_coordinate"))
                     is_global_odom = (nama_lower.startswith("global odometry") or
@@ -469,18 +443,18 @@ class SequenceManager:
                     # ---- Odometry (global / local / plain) ----
                     if is_global_odom or is_local_odom or is_plain_odom:
                         if is_global_odom:
-                            tg_x = float(gerak["vy"])
-                            tg_y = float(gerak["vx"])
-                            tg_w = float(gerak["vw"])
+                            tg_x = float(gerak["vy"]) if gerak["vy"] is not None else 0.0
+                            tg_y = float(gerak["vx"]) if gerak["vx"] is not None else 0.0
+                            tg_w = float(gerak["vw"]) if gerak["vw"] is not None else 0.0
                             cur_w = math.degrees(-self.robot_pos["angle"]) % 360.0
                             delta_w = (tg_w - cur_w + 180) % 360 - 180
                             tx = tg_y - self.robot_pos["y"]
                             ty = tg_x - self.robot_pos["x"]
                             tw = delta_w
                         else:
-                            tx = float(gerak["vx"])
-                            ty = float(gerak["vy"])
-                            tw = float(gerak["vw"])
+                            tx = float(gerak["vx"]) if gerak["vx"] is not None else 0.0
+                            ty = float(gerak["vy"]) if gerak["vy"] is not None else 0.0
+                            tw = float(gerak["vw"]) if gerak["vw"] is not None else 0.0
 
                         d_trans = math.hypot(tx, ty)
                         d_rot   = abs(tw)
@@ -504,8 +478,8 @@ class SequenceManager:
                     self.active_step_info["limit_val"] = limit_val
                     self.active_step_info["current_val"] = 0.0
 
-                    # Kirim perintah VEL dan tunggu sesuai limit
-                    self.send_command(f"VEL {send_vx} {send_vy} {send_vw}")
+                    # Kirim perintah (VEL atau BALANCE) dan tunggu sesuai limit
+                    self.send_command(f"{cmd_prefix} {send_vx} {send_vy} {send_vw}")
 
                     start_x     = self.robot_pos["x"]
                     start_y     = self.robot_pos["y"]
@@ -514,28 +488,31 @@ class SequenceManager:
 
                     accumulated_angle = 0.0
                     last_angle = self.robot_pos["angle"]
+                    last_loop_time = time.time()
 
                     self.line_latch = False  # Reset latch
                     while self.running_sequence:
                         time.sleep(0.01)
+                        now = time.time()
+                        dt = now - last_loop_time
+                        last_loop_time = now
+                        
+                        self.active_step_info["temp_x"] += send_vx * dt * 40.0
+                        self.active_step_info["temp_y"] += send_vy * dt * 40.0
+                        self.active_step_info["temp_w"] += send_vw * dt * 18.0
+
                         if limit_type == "Waktu (s)":
                             elapsed = time.time() - start_time
                             self.active_step_info["current_val"] = elapsed
                             if elapsed >= limit_val:
                                 break
                         elif limit_type in ("Jarak (px)", "Jarak (mm)"):
-                            dist = math.hypot(self.robot_pos["x"] - start_x,
-                                              self.robot_pos["y"] - start_y)
+                            dist = math.hypot(self.active_step_info["temp_x"], self.active_step_info["temp_y"])
                             self.active_step_info["current_val"] = dist
                             if dist >= limit_val:
                                 break
                         elif limit_type == "Sudut (°)":
-                            curr_angle = self.robot_pos["angle"]
-                            delta_rad = math.atan2(math.sin(curr_angle - last_angle),
-                                                   math.cos(curr_angle - last_angle))
-                            accumulated_angle += abs(math.degrees(delta_rad))
-                            last_angle = curr_angle
-
+                            accumulated_angle = abs(self.active_step_info["temp_w"])
                             self.active_step_info["current_val"] = accumulated_angle
                             if accumulated_angle >= limit_val:
                                 break
@@ -544,6 +521,18 @@ class SequenceManager:
                             self.active_step_info["current_val"] = 1.0 if has_line else 0.0
                             if has_line:
                                 break
+                        elif limit_type == "Sensor Jarak Depan (mm)":
+                            dist_val = self.robot_front_dist
+                            self.active_step_info["current_val"] = dist_val
+                            if dist_val <= limit_val:
+                                break
+                        elif limit_type == "Sensor Jarak Kiri (mm)":
+                            dist_val = self.robot_left_dist
+                            self.active_step_info["current_val"] = dist_val
+                            if dist_val <= limit_val:
+                                break
+
+                        self.send_command(f"{cmd_prefix} {send_vx} {send_vy} {send_vw}")
 
                     self.send_command("VEL 0 0 0")
                     time.sleep(0.1)

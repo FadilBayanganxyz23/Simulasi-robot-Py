@@ -47,9 +47,9 @@ def draw_slider_box_h(surface, x, y, wall_on_right=False):
     box_y = y - h // 2
     if wall_on_right:
         pygame.draw.rect(surface, WHITE, (box_x,         box_y, w // 2, h))
-        pygame.draw.rect(surface, RED,   (box_x + w // 2, box_y, w // 2, h))
+        pygame.draw.rect(surface, BLACK,   (box_x + w // 2, box_y, w // 2, h))
     else:
-        pygame.draw.rect(surface, RED,   (box_x,         box_y, w // 2, h))
+        pygame.draw.rect(surface, BLACK,   (box_x,         box_y, w // 2, h))
         pygame.draw.rect(surface, WHITE, (box_x + w // 2, box_y, w // 2, h))
     pygame.draw.rect(surface, BLACK, (box_x, box_y, w, h), 6)
 
@@ -60,7 +60,7 @@ def draw_slider_box_v(surface, x, y):
     box_x = x - w // 2
     box_y = y
     pygame.draw.rect(surface, WHITE, (box_x, box_y,           w, h // 2))
-    pygame.draw.rect(surface, RED,   (box_x, box_y + h // 2,  w, h // 2))
+    pygame.draw.rect(surface, BLACK,   (box_x, box_y + h // 2,  w, h // 2))
     pygame.draw.rect(surface, BLACK, (box_x, box_y,           w, h),     6)
 
 
@@ -95,13 +95,17 @@ def generate_vector_field(surface):
         pygame.draw.line(surface, BLACK, (ox + 500,  oy + y), (ox + 750,  oy + y), 10)
         draw_slider_box_h(surface, ox + 750,  oy + y, wall_on_right=True)
 
-    for y in [280, 430, 580]:
-        pygame.draw.line(surface, BLACK, (ox + 1470, oy + y), (ox + 1720, oy + y), 10)
-        draw_slider_box_h(surface, ox + 1720, oy + y, wall_on_right=True)
+    # Almari A2
+    pygame.draw.rect(surface, WHITE, (ox + 1820, oy + 180, 150, 500))
+    pygame.draw.rect(surface, BLACK, (ox + 1820, oy + 180, 150, 500), 10)
+    for y in [260, 430, 600]:
+        pygame.draw.line(surface, BLACK, (ox + 1470, oy + y), (ox + 1820, oy + y), 10)
 
-    for y in [1330, 1480, 1630]:
-        pygame.draw.line(surface, BLACK, (ox + 750,  oy + y), (ox + 1000, oy + y), 10)
-        draw_slider_box_h(surface, ox + 500,  oy + y, wall_on_right=False)
+    # Almari A1
+    pygame.draw.rect(surface, WHITE, (ox + 500, oy + 1230, 150, 500))
+    pygame.draw.rect(surface, BLACK, (ox + 500, oy + 1230, 150, 500), 10)
+    for y in [1310, 1480, 1650]:
+        pygame.draw.line(surface, BLACK, (ox + 650, oy + y), (ox + 1000, oy + y), 10)
 
     for y in [3420, 3570, 3720]:
         pygame.draw.line(surface, BLACK, (ox + 280,  oy + y), (ox + 530,  oy + y), 10)
@@ -156,8 +160,8 @@ def is_pixel_crossable(px, py):
         if abs(py - (oy + 3200)) < 15: return False
         return True
     if ox + 490  <= px <= ox + 760  and oy + 230  <= py <= oy + 630:  return True
-    if ox + 1460 <= px <= ox + 1730 and oy + 230  <= py <= oy + 630:  return True
-    if ox + 740  <= px <= ox + 1010 and oy + 1280 <= py <= oy + 1700: return True
+    if ox + 1460 <= px <= ox + 1815 and oy + 180  <= py <= oy + 680:  return True
+    if ox + 650  <= px <= ox + 1010 and oy + 1230 <= py <= oy + 1730: return True
     if ox + 270  <= px <= ox + 540  and oy + 3350 <= py <= oy + 3800: return True
     if ox + 1090 <= px <= ox + 1740 and oy + 3430 <= py <= oy + 3760: return True
     return False
@@ -170,10 +174,8 @@ def is_in_slider_box(px, py):
 
     for y in [280, 430, 580]:
         if ox + 750  <= px <= ox + 1000 and oy + y - 40 <= py <= oy + y + 40: return True
-    for y in [280, 430, 580]:
-        if ox + 1720 <= px <= ox + 1970 and oy + y - 40 <= py <= oy + y + 40: return True
-    for y in [1330, 1480, 1630]:
-        if ox + 500  <= px <= ox + 750  and oy + y - 40 <= py <= oy + y + 40: return True
+    if ox + 1820 <= px <= ox + 1970 and oy + 180 <= py <= oy + 680: return True
+    if ox + 500  <= px <= ox + 650  and oy + 1230 <= py <= oy + 1730: return True
     for y in [3420, 3570, 3720]:
         if ox + 30   <= px <= ox + 280  and oy + y - 40 <= py <= oy + y + 40: return True
     for x in [1100, 1400, 1700]:
@@ -193,10 +195,8 @@ def check_box_collision_circle(cx, cy, radius=50):
 
     for y in [280, 430, 580]:
         if _overlap(cx, cy, radius, ox + 750,  oy + y - 40, 250, 80): return True
-    for y in [280, 430, 580]:
-        if _overlap(cx, cy, radius, ox + 1720, oy + y - 40, 250, 80): return True
-    for y in [1330, 1480, 1630]:
-        if _overlap(cx, cy, radius, ox + 500,  oy + y - 40, 250, 80): return True
+    if _overlap(cx, cy, radius, ox + 1820, oy + 180, 150, 500): return True
+    if _overlap(cx, cy, radius, ox + 500, oy + 1230, 150, 500): return True
     for y in [3420, 3570, 3720]:
         if _overlap(cx, cy, radius, ox + 30,   oy + y - 40, 250, 80): return True
     for x in [1100, 1400, 1700]:

@@ -20,6 +20,9 @@ import math
 import sys
 import os
 import socket
+import base64
+import cv2
+import numpy as np
 
 # Pastikan window terbuka di tengah layar
 os.environ['SDL_VIDEO_CENTERED'] = '1'
@@ -157,8 +160,9 @@ def update_balance(robot, bst, raw_lapangan):
         return max(-max_val, min(max_val, val))
 
     mode = bst.get("mode")
-    vx_local, vy_local, vw = 0.0, 0.0, 0.0
-    is_done = False
+    vx_local = bst.get("base_vx", 0.0)
+    vy_local = bst.get("base_vy", 0.0)
+    vw = bst.get("base_vw", 0.0)
 
     if mode == "BALANCE_DEPAN":
         # Maju/Mundur
@@ -172,8 +176,6 @@ def update_balance(robot, bst, raw_lapangan):
         # Jika kanan lebih jauh (err_rot < 0), putar ke kanan (vw negatif)
         vw = prop_val(err_rot, 0.5, 45.0, 0.5)
 
-        if abs(err_dist) <= BALANCE_TOLERANCE and abs(err_rot) <= 2.0:
-            is_done = True
 
     elif mode == "BALANCE_KIRI":
         # Kiri/Kanan
@@ -187,8 +189,6 @@ def update_balance(robot, bst, raw_lapangan):
         # Jika belakang lebih jauh (err_rot > 0), berarti robot serong kiri, putar ke kiri (+vw) 
         vw = prop_val(err_rot, 0.5, 45.0, 0.5)
 
-        if abs(err_dist) <= BALANCE_TOLERANCE and abs(err_rot) <= 2.0:
-            is_done = True
 
     elif mode == "BALANCE_DEPAN_KIRI":
         # Maju/Mundur
@@ -205,12 +205,6 @@ def update_balance(robot, bst, raw_lapangan):
         err_rot = dist_us_f_l - dist_us_f_r
         vw = prop_val(err_rot, 0.5, 45.0, 0.5)
 
-        if abs(err_dist_f) <= BALANCE_TOLERANCE and abs(err_dist_l) <= BALANCE_TOLERANCE and abs(err_rot) <= 2.0:
-            is_done = True
-
-    if is_done:
-        bst["active"] = False
-        return 0.0, 0.0, 0.0, True
 
     return vx_local, vy_local, vw, False
 
@@ -227,6 +221,14 @@ server_socket.setblocking(False)
 client_socket = None
 client_buffer = ""
 is_vel_local = False
+
+cam_server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+cam_server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+cam_server_socket.bind(('127.0.0.1', 5006))
+cam_server_socket.listen(1)
+cam_server_socket.setblocking(False)
+cam_client_socket = None
+last_cam_send = 0.0
 
 # State machine Ambil Kubus (Approach stand terdekat + Grab)
 grab_sequence_state = {"active": False, "phase": "NONE", "_stuck_count": 0}
@@ -249,24 +251,25 @@ for y in [280, 430, 580]:
         "label": y_labels_p3[y]
     })
 
-# 2. Horizontal Group 2: ox+1720, y in [280, 430, 580] (P5)
-y_labels_p5 = {280: "P5 S1", 430: "P5 S2", 580: "P5 S3"}
-for y in [280, 430, 580]:
+
+# 2. Almari Group 2: ox+1820, y in [260, 430, 600] (A2)
+y_labels_a2 = {260: "A2 S1", 430: "A2 S2", 600: "A2 S3"}
+for y in [260, 430, 600]:
     stands.append({
-        "type": "H", "x": ox_st + 1720, "y": oy_st + y,
-        "rect": pygame.Rect(ox_st + 1720, oy_st + y - 40, 250, 80),
+        "type": "ALMARI_V", "x": ox_st + 1820, "y": oy_st + y,
+        "rect": pygame.Rect(ox_st + 1820, oy_st + y - 80, 150, 160),
         "color": None,
-        "label": y_labels_p5[y]
+        "label": y_labels_a2[y]
     })
 
-# 3. Horizontal Group 3: ox+500, y in [1330, 1480, 1630] (P4)
-y_labels_p4 = {1330: "P4 S3", 1480: "P4 S2", 1630: "P4 S1"}
-for y in [1330, 1480, 1630]:
+# 3. Almari Group 1: ox+500, y in [1310, 1480, 1650] (A1)
+y_labels_a1 = {1310: "A1 S1", 1480: "A1 S2", 1650: "A1 S3"}
+for y in [1310, 1480, 1650]:
     stands.append({
-        "type": "H", "x": ox_st + 500, "y": oy_st + y,
-        "rect": pygame.Rect(ox_st + 500, oy_st + y - 40, 250, 80),
+        "type": "ALMARI_V", "x": ox_st + 500, "y": oy_st + y,
+        "rect": pygame.Rect(ox_st + 500, oy_st + y - 80, 150, 160),
         "color": None,
-        "label": y_labels_p4[y]
+        "label": y_labels_a1[y]
     })
 
 # 4. Horizontal Group 4: ox+30, y in [3420, 3570, 3720] (P2)
@@ -434,6 +437,14 @@ while running:
                         use_ext_control = False
                         cmd_vx, cmd_vy, cmd_vw = 0.0, 0.0, 0.0
                         start_balance(robot, balance_state, parts[0])
+                        if len(parts) >= 4:
+                            balance_state["base_vx"] = safe_float(parts[1])
+                            balance_state["base_vy"] = safe_float(parts[2])
+                            balance_state["base_vw"] = safe_float(parts[3])
+                        else:
+                            balance_state["base_vx"] = 0.0
+                            balance_state["base_vy"] = 0.0
+                            balance_state["base_vw"] = 0.0
 
             else:
                 # Data kosong -> client disconnect
@@ -452,6 +463,16 @@ while running:
             use_ext_control = False
             is_vel_local = False
             balance_state["active"] = False
+
+    # 2.5. Terima koneksi kamera
+    try:
+        new_cam, _ = cam_server_socket.accept()
+        new_cam.setblocking(False)
+        if cam_client_socket:
+            cam_client_socket.close()
+        cam_client_socket = new_cam
+    except BlockingIOError:
+        pass
 
     # 3. Event Keyboard
     for event in pygame.event.get():
@@ -785,10 +806,16 @@ while running:
             drop_active = 1 if drop_sequence_state["active"] else 0
             storage_count = sum(1 for c in robot.storage if c is not None)
             storage_colors = ",".join([c[0] if c else "-" for c in robot.storage])
+            
+            (dist_us_f_l, dist_us_f_r, dist_ir_f, dist_ir_l_f, dist_ir_l_b) = robot.get_sensor_distances(raw_lapangan)
+            front_dist = min(dist_us_f_l, dist_us_f_r, dist_ir_f)
+            left_dist = min(dist_ir_l_f, dist_ir_l_b)
+            
             status_msg = (f"STATUS {rel_x} {rel_y} {rel_angle} "
                           f"{robot.total_dist} {nav_status} {bal_status} {phase_str} "
                           f"{robot.line_l} {robot.line_r} "
-                          f"{grab_active} {storage_count} {storage_colors} {drop_active}\n")
+                          f"{grab_active} {storage_count} {storage_colors} {drop_active} "
+                          f"{front_dist:.2f} {left_dist:.2f}\n")
             client_socket.sendall(status_msg.encode('utf-8'))
         except (BlockingIOError, ConnectionResetError, BrokenPipeError):
             pass
@@ -812,6 +839,9 @@ while running:
             if s["type"] == "H":
                 cx = s["x"] + 125
                 cy = s["y"]
+            elif s["type"] == "ALMARI_V":
+                cx = s["x"] + 75
+                cy = s["y"]
             else:
                 cx = s["x"]
                 cy = s["y"] + 105
@@ -824,6 +854,45 @@ while running:
             
             pygame.draw.rect(screen, color_val, rect_s)
             pygame.draw.rect(screen, BLACK, rect_s, 1)
+
+    # 7.5. Camera Stream Send (Capture SEBELUM overlay dan robot digambar)
+    import time as time_mod
+    current_time = time_mod.time()
+    if cam_client_socket and current_time - last_cam_send > 0.1:  # 10 fps
+        try:
+            rx = int(robot.orig_x * SCALE) + offset_x
+            ry = int(robot.orig_y * SCALE)
+            
+            # Buat surface temporary untuk crop
+            cam_surf = pygame.Surface((300, 300))
+            # Blit area di sekitar robot ke cam_surf (tanpa robot itu sendiri, coretan, atau label)
+            cam_surf.blit(screen, (0, 0), (rx - 150, ry - 150, 300, 300))
+            
+            # Putar agar searah pandangan robot (0 derajat robot adalah hadap atas di layar)
+            deg = math.degrees(robot.angle)
+            rotated_surf = pygame.transform.rotate(cam_surf, -deg - 90)
+            
+            # Ambil crop 200x200 di tengah
+            w, h = rotated_surf.get_size()
+            final_cam = rotated_surf.subsurface((w//2 - 100, h//2 - 100, 200, 200))
+            
+            # Encode ke JPEG menggunakan OpenCV
+            img_string = pygame.image.tostring(final_cam, "RGB")
+            img_arr = np.frombuffer(img_string, dtype=np.uint8).reshape((200, 200, 3))
+            img_bgr = cv2.cvtColor(img_arr, cv2.COLOR_RGB2BGR)
+            
+            _, buffer = cv2.imencode('.jpg', img_bgr, [int(cv2.IMWRITE_JPEG_QUALITY), 60])
+            b64_img = base64.b64encode(buffer).decode('ascii')
+            
+            msg = b64_img + "\n"
+            cam_client_socket.sendall(msg.encode('ascii'))
+            last_cam_send = current_time
+        except BlockingIOError:
+            pass
+        except Exception as e:
+            try: cam_client_socket.close()
+            except: pass
+            cam_client_socket = None
 
     # --- Render Coretan (Scribbles) ---
     for stroke in scribbles:
@@ -855,6 +924,8 @@ while running:
 
     # Gambar robot
     robot.draw(screen, raw_lapangan, SCALE, offset_x)
+
+
 
     # 8. HUD / Control Panel
     pos_x_cm    = rel_x / 10.0
@@ -1019,8 +1090,8 @@ while running:
             draw_table_section("P1 - START AREA (BOTTOM)", ["P1 S1", "P1 S2", "P1 S3"], 80)
             draw_table_section("P2 - BOTTOM LEFT SIDEBAR", ["P2 S3", "P2 S2", "P2 S1"], 190)
             draw_table_section("P3 - TOP LEFT SIDEBAR", ["P3 S1", "P3 S2", "P3 S3"], 300)
-            draw_table_section("P4 - MID LEFT SIDEBAR", ["P4 S3", "P4 S2", "P4 S1"], 410)
-            draw_table_section("P5 - TOP RIGHT SIDEBAR", ["P5 S1", "P5 S2", "P5 S3"], 520)
+            draw_table_section("A2 - TOP RIGHT SIDEBAR", ["A2 S1", "A2 S2", "A2 S3"], 410)
+            draw_table_section("A1 - BOTTOM RIGHT SIDEBAR", ["A1 S1", "A1 S2", "A1 S3"], 520)
         else:
             text_x       = 20
             text_y_start = 15

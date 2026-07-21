@@ -1,0 +1,6 @@
+Traceback (most recent call last):
+  File "C:\Users\sanza\OneDrive\Desktop\Adadeh\Simul Lane trace\simul_jalan.py", line 919, in <module>
+    cam_client_socket.sendall(msg.encode('ascii'))
+    ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^
+ConnectionAbortedError: [WinError 10053] An established connection was aborted by the software in your host machine
+
