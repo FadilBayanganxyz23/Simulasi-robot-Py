@@ -343,21 +343,30 @@
     ],
     "tes": [
         {
-            "nama": "balance kiri",
-            "vx": 20.0,
+            "nama": "reset coordinate",
+            "vx": 10.0,
             "vy": 0.0,
             "vw": null,
-            "limit_type": "Sensor Jarak Depan (mm)",
-            "limit_val": 100.0,
+            "limit_type": "Waktu (s)",
+            "limit_val": 2.0,
             "keterangan": ""
         },
         {
-            "nama": "pwm",
+            "nama": "global odometry",
             "vx": 0.0,
-            "vy": 0.0,
-            "vw": 10.0,
-            "limit_type": "Sudut (\u00b0)",
-            "limit_val": 180.0,
+            "vy": 600.0,
+            "vw": null,
+            "limit_type": "Waktu (s)",
+            "limit_val": 2.0,
+            "keterangan": ""
+        },
+        {
+            "nama": "global odometry",
+            "vx": 1000.0,
+            "vy": 600.0,
+            "vw": null,
+            "limit_type": "Waktu (s)",
+            "limit_val": 2.0,
             "keterangan": ""
         }
     ]

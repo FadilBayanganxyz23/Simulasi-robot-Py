@@ -451,10 +451,14 @@ class SequenceManager:
                             tx = tg_y - self.robot_pos["y"]
                             ty = tg_x - self.robot_pos["x"]
                             tw = delta_w
+                            self.active_step_info["target_x_pyg"] = tg_x
+                            self.active_step_info["target_y_pyg"] = tg_y
                         else:
                             tx = float(gerak["vx"]) if gerak["vx"] is not None else 0.0
                             ty = float(gerak["vy"]) if gerak["vy"] is not None else 0.0
                             tw = float(gerak["vw"]) if gerak["vw"] is not None else 0.0
+                            self.active_step_info["target_x_pyg"] = self.robot_pos["x"] + ty
+                            self.active_step_info["target_y_pyg"] = self.robot_pos["y"] + tx
 
                         d_trans = math.hypot(tx, ty)
                         d_rot   = abs(tw)
@@ -464,8 +468,9 @@ class SequenceManager:
                         send_vx = (tx / T) / 40.0
                         send_vy = (ty / T) / 40.0
                         send_vw = (tw / T) / 18.0
-                        limit_type = "Waktu (s)"
-                        limit_val  = T
+                        limit_type = "Odometry"
+                        limit_val  = d_trans
+                        self.active_step_info["odom_start_time"] = time.time()
 
                     else:
                         send_vx    = float(gerak["vx"]) if gerak["vx"] is not None else 0.0
@@ -497,11 +502,35 @@ class SequenceManager:
                         dt = now - last_loop_time
                         last_loop_time = now
                         
-                        self.active_step_info["temp_x"] += send_vx * dt * 40.0
-                        self.active_step_info["temp_y"] += send_vy * dt * 40.0
-                        self.active_step_info["temp_w"] += send_vw * dt * 18.0
+                        if limit_type == "Odometry":
+                            # Gunakan perbedaan koordinat fisik simulator agar Temp akurat
+                            self.active_step_info["temp_x"] = self.robot_pos["y"] - start_y
+                            self.active_step_info["temp_y"] = self.robot_pos["x"] - start_x
+                            # Angle Pygame dibalik (-angle), jadi kita invert untuk temp_w
+                            cur_w = math.degrees(-self.robot_pos["angle"]) % 360.0
+                            sw = math.degrees(-start_angle) % 360.0
+                            dw = (cur_w - sw + 180) % 360 - 180
+                            self.active_step_info["temp_w"] = dw
+                        else:
+                            self.active_step_info["temp_x"] += send_vx * dt * 40.0
+                            self.active_step_info["temp_y"] += send_vy * dt * 40.0
+                            self.active_step_info["temp_w"] += send_vw * dt * 18.0
 
-                        if limit_type == "Waktu (s)":
+                        if limit_type == "Odometry":
+                            t_x = self.active_step_info["target_x_pyg"]
+                            t_y = self.active_step_info["target_y_pyg"]
+                            dist_to_target = math.hypot(t_x - self.robot_pos["x"], t_y - self.robot_pos["y"])
+                            self.active_step_info["current_val"] = limit_val - dist_to_target
+                            
+                            # Cek jarak target (toleransi 10 mm)
+                            if dist_to_target <= 10.0:
+                                break
+                            
+                            # Fallback timeout 7 detik jika tersangkut / menabrak dinding
+                            if time.time() - self.active_step_info["odom_start_time"] > 7.0:
+                                break
+
+                        elif limit_type == "Waktu (s)":
                             elapsed = time.time() - start_time
                             self.active_step_info["current_val"] = elapsed
                             if elapsed >= limit_val:
