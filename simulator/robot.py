@@ -369,6 +369,9 @@ class SimRobot:
             if s["type"] == "H":
                 cx = s["x"] + 125
                 cy = s["y"]
+            elif s["type"] == "ALMARI_V":
+                cx = s["x"] + 75
+                cy = s["y"]
             else:
                 cx = s["x"]
                 cy = s["y"] + 105
@@ -406,6 +409,9 @@ class SimRobot:
         for s in stands:
             if s["type"] == "H":
                 cx = s["x"] + 125
+                cy = s["y"]
+            elif s["type"] == "ALMARI_V":
+                cx = s["x"] + 75
                 cy = s["y"]
             else:
                 cx = s["x"]
@@ -572,7 +578,8 @@ class SimRobot:
             theta = i * (2 * math.pi / 12)
             corners.append((sx + hw * math.cos(a + theta),
                             sy + hh * math.sin(a + theta)))
-        pygame.draw.polygon(surface, BLUE,  corners)
+        ROBOT_GRAY = (120, 120, 130)
+        pygame.draw.polygon(surface, ROBOT_GRAY, corners)
         pygame.draw.polygon(surface, BLACK, corners, 2)
 
         # ----------------------------------------------------------------

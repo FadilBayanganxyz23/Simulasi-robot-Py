@@ -2,19 +2,19 @@
 # BUKU PANDUAN FITUR - SIMULASI ROBOT OMNI & GUI CONTROLLER
 # ==============================================================================
 
-Berikut adalah daftar lengkap fitur-fitur dan pergerakan yang bisa dilakukan 
-oleh robot di dalam simulasi, serta penjelasan fungsi-fungsinya.
+Berikut adalah daftar lengkap fitur-fitur, pergerakan, dan pemrosesan otomatis 
+yang bisa dilakukan oleh robot di dalam simulasi, serta penjelasan fungsi-fungsinya.
 
 ------------------------------------------------------------------------------
 A. PERINTAH GERAKAN (COMMANDS)
 ------------------------------------------------------------------------------
 
 1. Local Odometry (Pergerakan Relatif)
-   - Deskripsi: Mengerakkan robot berdasarkan koordinat dirinya sendiri (lokal).
+   - Deskripsi: Menggerakkan robot berdasarkan koordinat dirinya sendiri (lokal).
      Vx positif akan membuat robot melaju ke depan, Vy positif membuat robot 
      bergeser ke kanan, dan Vw mengatur rotasi.
-   - Nama Gerakan yang umum dipakai: "local odometry", "maju", "geser", "rotasi".
-   
+   - Nama Gerakan: "local odometry", "maju", "geser", "rotasi".
+
 2. Global Odometry (Pergerakan Absolut)
    - Deskripsi: Menggerakkan robot berdasarkan koordinat lapangan (global Pygame).
      Arah atas/bawah/kiri/kanan lapangan akan selalu tetap, tidak peduli ke arah 
@@ -28,8 +28,10 @@ A. PERINTAH GERAKAN (COMMANDS)
 
 4. Delay (Menunggu)
    - Deskripsi: Menghentikan pergerakan robot selama beberapa waktu.
+     [MODIFIKASI]: Jika langkah ini merupakan hasil turunan dari "apakah ditaruh?" 
+     yang tidak menemukan warna kubus cocok, delay akan otomatis diisi 0.1s 
+     dengan keterangan "Dilewati".
    - Nama Gerakan: Harus mengandung kata "delay".
-   - Tip: Vx, Vy, dan Vw otomatis diatur menjadi 0 secara internal.
 
 5. Find Coordinate (Navigasi A-Star / Autopilot)
    - Deskripsi: Menginstruksikan robot untuk secara otomatis mencari rute jalan 
@@ -38,64 +40,90 @@ A. PERINTAH GERAKAN (COMMANDS)
    - Nama Gerakan: Harus mengandung kata "find coordinate" atau "navigasi".
 
 6. Reset Coordinate / Reset Odometry
-   - Deskripsi: Mengatur ulang origin kalkulasi jarak di dalam game, berguna 
-     jika ingin memulai sekuens pengukuran jarak yang baru (0 cm).
+   - Deskripsi: Mengatur ulang origin kalkulasi jarak di dalam game (0 cm).
    - Nama Gerakan: "reset coordinate" atau "reset odometry".
 
 7. Balance (Penyesuaian Sensor ke Tembok/Garis)
    - Deskripsi: Menyetarakan jarak dan sudut robot terhadap dinding sejauh 5cm 
      agar robot berada dalam posisi tegak lurus sempurna.
-   - Nama Gerakan:
-     * "balance depan": Menggunakan 2 sensor Ultrasonic depan.
-     * "balance kiri": Menggunakan 2 sensor Infrared kiri.
-     * "balance depan kiri": Menggunakan kedua tipe sensor (sudut siku-siku).
-   - Tip: Proses balance memiliki batas maksimal (timeout) 3 detik.
+   - Nama Gerakan: "balance depan", "balance kiri", "balance depan kiri".
 
-8. Gripper & Storage (Ambil / Taruh Kubus)
-   - Deskripsi: Robot akan melakukan urutan otomatis untuk mendekati kotak, 
-     menurunkan Gripper, lalu menyimpannya ke dalam Storage (Carousel), atau 
-     mengeluarkannya (Taruh) di area Base.
-   - Nama Gerakan: "ambil kubus", "taruh kubus".
-   - Tip: Saat menaruh kubus, nomor slot yang ditaruh dapat diatur melalui Vx.
+8. Ambil Kubus (Grab Sequence)
+   - Deskripsi: Robot secara otomatis mendekati stand kosong/berisi di depannya, 
+     menjulurkan gripper, mengambil kubus, dan menyimpannya ke slot storage carousel.
+   - Nama Gerakan: "ambil kubus", "grab".
 
-------------------------------------------------------------------------------
-B. TIPE LIMIT (BATAS KONDISI)
-------------------------------------------------------------------------------
-
-Untuk setiap gerakan (selain Navigasi/Balance/Gripper yang berjalan otomatis), 
-Anda bisa membatasinya dengan parameter:
-
-1. Waktu (s)
-   - Robot akan menjalankan perintah selama X detik.
-2. Jarak (px)
-   - Robot akan berjalan secara linear sejauh X pixel dari titik awal perintah.
-3. Sudut (°)
-   - Robot akan berputar/rotasi sampai target X derajat tercapai.
-4. Sensor Garis
-   - Robot akan menjalankan perintah tanpa batas waktu/jarak, lalu HANYA akan 
-     berhenti apabila Sensor Garis (bawah) mendeteksi perubahan kontras yang tajam 
-     (seperti melewati garis putih).
+9. Taruh Kubus (Drop Sequence)
+   - [MODIFIKASI & DIPERBARUI]:
+     * Robot akan membaca seluruh 8 slot isi storage 1 per 1 dan mencocokkannya 
+       dengan warna target yang diminta di Keterangan / target memory.
+     * Rak Carousel storage diputar otomatis hingga slot yang berisi kubus cocok 
+       berada di posisi depan.
+     * Gripper meletakkan kubus secara presisi pada posisi pusat Stand / Rak Almari (`ALMARI_V`).
+     * GUI Controller mengunci penungguan hingga animasi drop SELESAI di simulator 
+       sebelum melepaskan sekuens ke langkah berikutnya.
+   - Nama Gerakan: "taruh kubus", "drop".
 
 ------------------------------------------------------------------------------
-C. FITUR GUI CONTROLLER
+B. FITUR BARU & LOGIKA LOGIKA PINTAR (NEW FEATURES)
 ------------------------------------------------------------------------------
 
-1. Manajemen Preset Kombinasi (Draft & Queue)
-   - Memungkinkan Anda menyimpan urutan kombinasi di file "presets.json".
-   - Dapat di-load, diedit, atau dihapus langsung di GUI.
+1. apakah ditaruh? (Cek Warna Storage & Taruh Otomatis)
+   - [FITUR BARU]:
+     * Memeriksa slot target di Almari (misal `A1 S3`, `A1 S2`, `A1 S1`) atau nama warna (`RED`, `GREEN`, `BLUE`).
+     * Membaca seluruh isi 8 slot storage robot 1 per 1.
+     * Jika kubus warna yang cocok ditemukan di storage (misal RED ada di Slot S2), 
+       langkah `taruh kubus` selanjutnya otomatis diubah nilainya ke slot S2 (`2.0`) 
+       dan robot menaruhnya ke Almari.
+     * Jika target slot Almari bernilai `EMPTY` (tidak butuh kubus) atau warna yang 
+       dicari tidak ada di storage, langkah `taruh kubus` otomatis di-skip (diganti `delay 0.1s`).
 
-2. Mulai dari Pilihan (Start From)
-   - Tidak perlu menjalankan sekuens dari awal. Anda dapat menyorot salah satu 
-     tahapan yang sudah berjalan, lalu klik "Mulai dari Pilihan" untuk melanjutkan.
+2. apakah full? / full? (Cek Storage Penuh & Lompat Urutan)
+   - [FITUR BARU]:
+     * Memeriksa apakah kapasitas storage robot telah penuh (8 kubus).
+     * Membandingkan secara otomatis jumlah warna kubus di storage dengan total 
+       kebutuhan warna pada Target Almari.
+     * Jika Storage Penuh ATAU Target Terpenuhi: Sekuens otomatis melompat (*jump*) 
+       ke Urutan Kombinasi #4 ("taruh ke almari" / urutan yang ditentukan di Keterangan).
+     * Jika Belum Penuh: Sekuens berlanjut ke langkah berikutnya tanpa melompat.
 
-3. Reset Robot
-   - Mengembalikan robot secara instan ke koordinat Home / awal lapangan, tanpa 
-     perlu me-restart program. (Status storage dan sequence otomatis ter-reset).
+3. Scanning Stand Ultra-Narrow Crop (Visi 36px)
+   - [FITUR BARU]:
+     * Pemotongan frame kamera vision dipersempit menjadi 36px x 90px persis pada 1 garis stand.
+     * Memastikan 100% tidak ada kebocoran warna dari kubus di stand tetangga.
 
-4. Reset Storage
-   - Mengosongkan 8 slot penyimpanan carousel secara paksa, berguna untuk pengujian 
-     urutan ambil-taruh kubus secara berulang.
+4. Modul Terpisah Vision & Navigasi
+   - [FITUR BARU]:
+     * `simulator/vision.py`: Pemrosesan OpenCV HSV & scanning warna.
+     * `simulator/navigation.py`: Pathfinding A* & Pure Pursuit.
+
+------------------------------------------------------------------------------
+C. TIPE LIMIT (BATAS KONDISI)
+------------------------------------------------------------------------------
+
+1. Waktu (s)   : Menjalankan perintah selama X detik.
+2. Jarak (px)  : Menjalankan perintah sejauh X pixel.
+3. Sudut (°)   : Berputar hingga target X derajat tercapai.
+4. Sensor Garis: Berjalan hingga Sensor Garis mendeteksi garis putih.
+
+------------------------------------------------------------------------------
+D. FITUR GUI CONTROLLER & PENGELOLAAN SEKUENS
+------------------------------------------------------------------------------
+
+1. Tombol Copy (Salin Kombinasi & Gerakan)
+   - [FITUR BARU]: Tombol "Copy" tersedia di Level 1 (Urutan Kombinasi), 
+     Level 2 (Antrean Kombinasi), dan Level 3 (Detail Gerakan) untuk menduplikasi 
+     item dengan satu kali klik.
+
+2. Stand & Target Memory Real-Time
+   - Menampilkan visualisasi tabel memori hasil scanning Ruangan P (P1-P3), 
+     Gudang A (A1-A2), dan Target Almari.
+
+3. Mulai dari Pilihan (Start From)
+   - Menjalankan sekuens dari tahapan tertentu yang disorot user.
+
+4. Reset Robot & Reset Storage
+   - Reset posisi robot ke HOME (0,0) atau Reset paksa isi 8 slot storage carousel.
 
 5. Telemetri Real-Time
-   - GUI akan langsung menampilkan angka Posisi X/Y (cm), Heading Sudut (°), Jarak Tempuh, 
-     status Sensor Garis, dan visual Storage (Warna kubus pada Carousel 1-8).
+   - Menampilkan posisi X/Y, heading sudut, jarak tempuh, sensor garis, dan 8 slot storage.

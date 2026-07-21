@@ -23,6 +23,7 @@ import socket
 import base64
 import cv2
 import numpy as np
+import json
 
 # Pastikan window terbuka di tengah layar
 os.environ['SDL_VIDEO_CENTERED'] = '1'
@@ -48,6 +49,7 @@ from simulator.navigation import (
     init_obstacle_grid,
     make_nav_state, start_navigation, cancel_navigation, step_navigation,
 )
+from simulator.vision import perform_scan_stand, perform_scan_almari
 
 # ---------------------------------------------------------------------------
 # Bangun lapangan
@@ -230,6 +232,11 @@ cam_server_socket.setblocking(False)
 cam_client_socket = None
 last_cam_send = 0.0
 
+# ---------------------------------------------------------------------------
+# Modul Visi Komputer (dikelola di simulator/vision.py)
+# ---------------------------------------------------------------------------
+scan_results = []
+
 # State machine Ambil Kubus (Approach stand terdekat + Grab)
 grab_sequence_state = {"active": False, "phase": "NONE", "_stuck_count": 0}
 
@@ -241,9 +248,9 @@ stands = []
 ox_st = FIELD_OFFSET_X
 oy_st = FIELD_OFFSET_Y
 
-# 1. Horizontal Group 1: ox+750, y in [280, 430, 580] (P3)
-y_labels_p3 = {280: "P3 S1", 430: "P3 S2", 580: "P3 S3"}
-for y in [280, 430, 580]:
+# 1. Horizontal Group 1: ox+750, y in [230, 430, 630] (P3)
+y_labels_p3 = {230: "P3 S1", 430: "P3 S2", 630: "P3 S3"}
+for y in [230, 430, 630]:
     stands.append({
         "type": "H", "x": ox_st + 750, "y": oy_st + y,
         "rect": pygame.Rect(ox_st + 750, oy_st + y - 40, 250, 80),
@@ -272,9 +279,9 @@ for y in [1310, 1480, 1650]:
         "label": y_labels_a1[y]
     })
 
-# 4. Horizontal Group 4: ox+30, y in [3420, 3570, 3720] (P2)
-y_labels_p2 = {3420: "P2 S3", 3570: "P2 S2", 3720: "P2 S1"}
-for y in [3420, 3570, 3720]:
+# 4. Horizontal Group 4: ox+30, y in [3370, 3570, 3770] (P2)
+y_labels_p2 = {3370: "P2 S3", 3570: "P2 S2", 3770: "P2 S1"}
+for y in [3370, 3570, 3770]:
     stands.append({
         "type": "H", "x": ox_st + 30, "y": oy_st + y,
         "rect": pygame.Rect(ox_st + 30, oy_st + y - 40, 250, 80),
@@ -282,9 +289,9 @@ for y in [3420, 3570, 3720]:
         "label": y_labels_p2[y]
     })
 
-# 5. Vertical Group: x in [1100, 1400, 1700], y = oy + 3760 (P1)
-x_labels_p1 = {1100: "P1 S1", 1400: "P1 S2", 1700: "P1 S3"}
-for x in [1100, 1400, 1700]:
+# 5. Vertical Group: x in [1200, 1400, 1600], y = oy + 3760 (P1)
+x_labels_p1 = {1200: "P1 S1", 1400: "P1 S2", 1600: "P1 S3"}
+for x in [1200, 1400, 1600]:
     stands.append({
         "type": "V", "x": ox_st + x, "y": oy_st + 3760,
         "rect": pygame.Rect(ox_st + x - 40, oy_st + 3760, 80, 210),
@@ -446,6 +453,21 @@ while running:
                             balance_state["base_vy"] = 0.0
                             balance_state["base_vw"] = 0.0
 
+                    elif parts[0] == "SCAN_STAND":
+                        label = " ".join(parts[1:])
+                        detected_color = perform_scan_stand(robot, screen, offset_x, SCALE)
+                        scan_results.append(f"SCAN_RESULT {label} {detected_color}")
+                        
+                    elif parts[0] == "SCAN_ALMARI":
+                        label_prefix = " ".join(parts[1:])
+                        res = perform_scan_almari(robot, screen, offset_x, SCALE, label_prefix)
+                        scan_results.append(f"SCAN_ALMARI_RESULT {label_prefix} S1 {res[0]} S2 {res[1]} S3 {res[2]}")
+
+                    elif parts[0] == "SCAN_TARGET":
+                        label_prefix = " ".join(parts[1:])
+                        res = perform_scan_almari(robot, screen, offset_x, SCALE, label_prefix)
+                        scan_results.append(f"SCAN_TARGET_RESULT {label_prefix} S1 {res[0]} S2 {res[1]} S3 {res[2]}")
+
             else:
                 # Data kosong -> client disconnect
                 client_socket.close()
@@ -522,15 +544,51 @@ while running:
                             break
 
                     if clicked_stand:
-                        # Cycle color: None -> RED -> GREEN -> BLUE -> None
-                        if clicked_stand["color"] is None:
-                            clicked_stand["color"] = "RED"
-                        elif clicked_stand["color"] == "RED":
-                            clicked_stand["color"] = "GREEN"
-                        elif clicked_stand["color"] == "GREEN":
-                            clicked_stand["color"] = "BLUE"
-                        else:
-                            clicked_stand["color"] = None
+                        if s["type"] == "ALMARI_V" and event.button == 1:
+                            # Jika Almari V, cek apakah diklik sisi kiri (Aktual) atau kanan (Target)
+                            center_x = s["x"] + 75
+                            if orig_mx < center_x:
+                                # Klik sisi Kiri (Kotak Dalam): Cycle warna Aktual
+                                if clicked_stand["color"] is None:
+                                    clicked_stand["color"] = "RED"
+                                elif clicked_stand["color"] == "RED":
+                                    clicked_stand["color"] = "GREEN"
+                                elif clicked_stand["color"] == "GREEN":
+                                    clicked_stand["color"] = "BLUE"
+                                else:
+                                    clicked_stand["color"] = None
+                            else:
+                                # Klik sisi Kanan (Kotak Target Ungu): Cycle warna Target
+                                target = clicked_stand.get("target_color")
+                                if target is None:
+                                    clicked_stand["target_color"] = "RED"
+                                elif target == "RED":
+                                    clicked_stand["target_color"] = "GREEN"
+                                elif target == "GREEN":
+                                    clicked_stand["target_color"] = "BLUE"
+                                else:
+                                    clicked_stand["target_color"] = None
+                        elif event.button == 1:
+                            # Left click stand biasa: Cycle warna Aktual
+                            if clicked_stand["color"] is None:
+                                clicked_stand["color"] = "RED"
+                            elif clicked_stand["color"] == "RED":
+                                clicked_stand["color"] = "GREEN"
+                            elif clicked_stand["color"] == "GREEN":
+                                clicked_stand["color"] = "BLUE"
+                            else:
+                                clicked_stand["color"] = None
+                        elif event.button == 3:
+                            # Right click: Cycle target color
+                            target = clicked_stand.get("target_color")
+                            if target is None:
+                                clicked_stand["target_color"] = "RED"
+                            elif target == "RED":
+                                clicked_stand["target_color"] = "GREEN"
+                            elif target == "GREEN":
+                                clicked_stand["target_color"] = "BLUE"
+                            else:
+                                clicked_stand["target_color"] = None
                     else:
                         if active_tool == "TELEPORT":
                             if not robot.check_collision(int(orig_mx), int(orig_my), robot.angle, raw_lapangan):
@@ -711,6 +769,9 @@ while running:
                 if s["type"] == "H":
                     cx = s["x"] + 125
                     cy = s["y"]
+                elif s["type"] == "ALMARI_V":
+                    cx = s["x"] + 75
+                    cy = s["y"]
                 else:
                     cx = s["x"]
                     cy = s["y"] + 105
@@ -811,11 +872,16 @@ while running:
             front_dist = min(dist_us_f_l, dist_us_f_r, dist_ir_f)
             left_dist = min(dist_ir_l_f, dist_ir_l_b)
             
-            status_msg = (f"STATUS {rel_x} {rel_y} {rel_angle} "
+            status_msg = (f"STATUS {rel_y} {rel_x} {rel_angle} "
                           f"{robot.total_dist} {nav_status} {bal_status} {phase_str} "
                           f"{robot.line_l} {robot.line_r} "
                           f"{grab_active} {storage_count} {storage_colors} {drop_active} "
                           f"{front_dist:.2f} {left_dist:.2f}\n")
+                          
+            for res in scan_results:
+                status_msg += f"{res}\n"
+            scan_results.clear()
+            
             client_socket.sendall(status_msg.encode('utf-8'))
         except (BlockingIOError, ConnectionResetError, BrokenPipeError):
             pass
@@ -824,36 +890,77 @@ while running:
     screen.fill(BLACK)
     screen.blit(scaled_lapangan, (offset_x, 0))
 
-    # --- Render Cubes on top of stands ---
+    # --- Render Cubes & Target Indicators on top of stands ---
     for s in stands:
-        if s["color"] is not None:
-            # Tentukan warna
-            if s["color"] == "RED":
+        # Hitung pusat stand
+        if s["type"] == "H":
+            cx = s["x"] + 125
+            cy = s["y"]
+        elif s["type"] == "ALMARI_V":
+            cx = s["x"] + 75
+            cy = s["y"]
+        else:
+            cx = s["x"]
+            cy = s["y"] + 105
+            
+        scx = offset_x + cx * SCALE
+        scy = cy * SCALE
+
+        # Render DUAL INDICATORS untuk Almari (Kotak Aktual & Kotak Target berdampingan)
+        if s["type"] == "ALMARI_V":
+            # --- 1. Kotak Kiri: Aktual / Kubus Terpasang (A) ---
+            act_col = s.get("color")
+            act_w, act_h = 16, 16
+            act_rect = pygame.Rect(scx - 18, scy - 8, act_w, act_h)
+            
+            if act_col == "RED":
                 color_val = (255, 0, 0)
-            elif s["color"] == "GREEN":
+            elif act_col == "GREEN":
                 color_val = (0, 200, 0)
-            else: # BLUE
+            elif act_col == "BLUE":
                 color_val = (0, 100, 255)
-            
-            # Hitung pusat stand
-            if s["type"] == "H":
-                cx = s["x"] + 125
-                cy = s["y"]
-            elif s["type"] == "ALMARI_V":
-                cx = s["x"] + 75
-                cy = s["y"]
             else:
-                cx = s["x"]
-                cy = s["y"] + 105
+                color_val = (35, 35, 35)
                 
-            scx = offset_x + cx * SCALE
-            scy = cy * SCALE
-            cube_w = 20
-            cube_h = 20
-            rect_s = pygame.Rect(scx - cube_w / 2, scy - cube_h / 2, cube_w, cube_h)
+            pygame.draw.rect(screen, color_val, act_rect)
+            pygame.draw.rect(screen, WHITE if act_col else (100, 100, 100), act_rect, 1)
+
+            # --- 2. Kotak Kanan: Target Tujuan (Ungu saat Kosong) ---
+            tgt_col = s.get("target_color")
+            tgt_w, tgt_h = 16, 16
+            tgt_rect = pygame.Rect(scx + 2, scy - 8, tgt_w, tgt_h)
             
-            pygame.draw.rect(screen, color_val, rect_s)
-            pygame.draw.rect(screen, BLACK, rect_s, 1)
+            if tgt_col == "RED":
+                tgt_color_val = (255, 0, 0)
+                border_val = (255, 200, 200)
+            elif tgt_col == "GREEN":
+                tgt_color_val = (0, 200, 0)
+                border_val = (200, 255, 200)
+            elif tgt_col == "BLUE":
+                tgt_color_val = (0, 100, 255)
+                border_val = (200, 220, 255)
+            else:
+                tgt_color_val = (120, 30, 140)  # Warna Ungu untuk Target Kosong
+                border_val = (190, 80, 220)
+                
+            pygame.draw.rect(screen, tgt_color_val, tgt_rect)
+            pygame.draw.rect(screen, border_val, tgt_rect, 1)
+        else:
+            # Stand biasa (P1-P3)
+            if s["color"] is not None:
+                if s["color"] == "RED":
+                    color_val = (255, 0, 0)
+                elif s["color"] == "GREEN":
+                    color_val = (0, 200, 0)
+                else: # BLUE
+                    color_val = (0, 100, 255)
+                
+                cube_w = 18
+                cube_h = 18
+                rect_s = pygame.Rect(scx - cube_w / 2, scy - cube_h / 2, cube_w, cube_h)
+                
+                pygame.draw.rect(screen, color_val, rect_s)
+                pygame.draw.rect(screen, BLACK, rect_s, 1)
 
     # 7.5. Camera Stream Send (Capture SEBELUM overlay dan robot digambar)
     import time as time_mod
@@ -870,15 +977,15 @@ while running:
             
             # Putar agar searah pandangan robot (0 derajat robot adalah hadap atas di layar)
             deg = math.degrees(robot.angle)
-            rotated_surf = pygame.transform.rotate(cam_surf, -deg - 90)
+            rotated_surf = pygame.transform.rotate(cam_surf, deg + 90)
             
-            # Ambil crop 200x200 di tengah
+            # Crop khusus 1 Stand saja + Kubus di atasnya (lebar 36px, tinggi 90px di depan robot)
             w, h = rotated_surf.get_size()
-            final_cam = rotated_surf.subsurface((w//2 - 100, h//2 - 100, 200, 200))
+            final_cam = rotated_surf.subsurface((w//2 - 18, h//2 - 110, 36, 90))
             
             # Encode ke JPEG menggunakan OpenCV
             img_string = pygame.image.tostring(final_cam, "RGB")
-            img_arr = np.frombuffer(img_string, dtype=np.uint8).reshape((200, 200, 3))
+            img_arr = np.frombuffer(img_string, dtype=np.uint8).reshape((90, 36, 3))
             img_bgr = cv2.cvtColor(img_arr, cv2.COLOR_RGB2BGR)
             
             _, buffer = cv2.imencode('.jpg', img_bgr, [int(cv2.IMWRITE_JPEG_QUALITY), 60])
@@ -925,11 +1032,9 @@ while running:
     # Gambar robot
     robot.draw(screen, raw_lapangan, SCALE, offset_x)
 
-
-
     # 8. HUD / Control Panel
-    pos_x_cm    = rel_x / 10.0
-    pos_y_cm    = rel_y / 10.0
+    pos_x_cm    = rel_y / 10.0  # Sumbu X = Maju/Mundur (rel_y)
+    pos_y_cm    = rel_x / 10.0  # Sumbu Y = Kanan/Kiri (rel_x)
     heading_deg = math.degrees(-rel_angle) % 360.0
 
     if show_help:
@@ -1080,12 +1185,19 @@ while running:
                             color_disp = (100, 180, 255)
                             indicator_color = (0, 100, 255)
                     
-                    ind_rect = pygame.Rect(right_sidebar_x + 130, y_pos + 4, 12, 12)
+                    ind_rect = pygame.Rect(right_sidebar_x + 120, y_pos + 4, 12, 12)
                     pygame.draw.rect(screen, indicator_color, ind_rect)
                     pygame.draw.rect(screen, C_GRAY, ind_rect, 1)
                     
                     status_surf = font_text.render(f"[{color_text}]", True, color_disp)
-                    screen.blit(status_surf, (right_sidebar_x + 155, y_pos))
+                    screen.blit(status_surf, (right_sidebar_x + 140, y_pos))
+
+                    # Render Target color indicator if set
+                    if s and s.get("target_color"):
+                        tgt_col = s["target_color"]
+                        tgt_c = (255, 100, 100) if tgt_col == "RED" else ((100, 255, 100) if tgt_col == "GREEN" else (100, 180, 255))
+                        tgt_surf = font_text.render(f"Target: {tgt_col[:3]}", True, tgt_c)
+                        screen.blit(tgt_surf, (right_sidebar_x + 215, y_pos))
 
             draw_table_section("P1 - START AREA (BOTTOM)", ["P1 S1", "P1 S2", "P1 S3"], 80)
             draw_table_section("P2 - BOTTOM LEFT SIDEBAR", ["P2 S3", "P2 S2", "P2 S1"], 190)

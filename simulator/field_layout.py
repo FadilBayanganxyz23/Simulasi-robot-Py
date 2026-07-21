@@ -91,7 +91,7 @@ def generate_vector_field(surface):
     pygame.draw.line(surface, BLACK, (ox + 800,  oy + 3200), (ox + 1400, oy + 3200), 10)
 
     # 3. Rel Slider dan Kotak Slider
-    for y in [280, 430, 580]:
+    for y in [230, 430, 630]:
         pygame.draw.line(surface, BLACK, (ox + 500,  oy + y), (ox + 750,  oy + y), 10)
         draw_slider_box_h(surface, ox + 750,  oy + y, wall_on_right=True)
 
@@ -107,11 +107,11 @@ def generate_vector_field(surface):
     for y in [1310, 1480, 1650]:
         pygame.draw.line(surface, BLACK, (ox + 650, oy + y), (ox + 1000, oy + y), 10)
 
-    for y in [3420, 3570, 3720]:
+    for y in [3370, 3570, 3770]:
         pygame.draw.line(surface, BLACK, (ox + 280,  oy + y), (ox + 530,  oy + y), 10)
         draw_slider_box_h(surface, ox + 30,   oy + y, wall_on_right=False)
 
-    for x in [1100, 1400, 1700]:
+    for x in [1200, 1400, 1600]:
         pygame.draw.line(surface, BLACK, (ox + x, oy + 3510), (ox + x, oy + 3760), 10)
         draw_slider_box_v(surface, ox + x, oy + 3760)
 
@@ -150,7 +150,7 @@ def build_field_surfaces(screen_w, screen_h):
 
 def is_pixel_crossable(px, py):
     """Return True jika piksel (px,py) merupakan area yang boleh dilewati robot
-    (misal area slider / area HOME terbuka)."""
+    (misal area slider / area HOME terbuka / garis referensi stand)."""
     ox = FIELD_OFFSET_X
     oy = FIELD_OFFSET_Y
 
@@ -159,11 +159,11 @@ def is_pixel_crossable(px, py):
         if abs(py - (oy + 2500)) < 15: return False
         if abs(py - (oy + 3200)) < 15: return False
         return True
-    if ox + 490  <= px <= ox + 760  and oy + 230  <= py <= oy + 630:  return True
-    if ox + 1460 <= px <= ox + 1815 and oy + 180  <= py <= oy + 680:  return True
-    if ox + 650  <= px <= ox + 1010 and oy + 1230 <= py <= oy + 1730: return True
-    if ox + 270  <= px <= ox + 540  and oy + 3350 <= py <= oy + 3800: return True
-    if ox + 1090 <= px <= ox + 1740 and oy + 3430 <= py <= oy + 3760: return True
+    if ox + 450  <= px <= ox + 800  and oy + 180  <= py <= oy + 680:  return True  # P3
+    if ox + 1450 <= px <= ox + 1850 and oy + 180  <= py <= oy + 680:  return True  # A2
+    if ox + 600  <= px <= ox + 1020 and oy + 1200 <= py <= oy + 1760: return True  # A1
+    if ox + 250  <= px <= ox + 550  and oy + 3300 <= py <= oy + 3840: return True  # P2
+    if ox + 1150 <= px <= ox + 1650 and oy + 3430 <= py <= oy + 3800: return True  # P1
     return False
 
 
@@ -172,13 +172,13 @@ def is_in_slider_box(px, py):
     ox = FIELD_OFFSET_X
     oy = FIELD_OFFSET_Y
 
-    for y in [280, 430, 580]:
+    for y in [230, 430, 630]:
         if ox + 750  <= px <= ox + 1000 and oy + y - 40 <= py <= oy + y + 40: return True
     if ox + 1820 <= px <= ox + 1970 and oy + 180 <= py <= oy + 680: return True
     if ox + 500  <= px <= ox + 650  and oy + 1230 <= py <= oy + 1730: return True
-    for y in [3420, 3570, 3720]:
+    for y in [3370, 3570, 3770]:
         if ox + 30   <= px <= ox + 280  and oy + y - 40 <= py <= oy + y + 40: return True
-    for x in [1100, 1400, 1700]:
+    for x in [1200, 1400, 1600]:
         if ox + x - 40 <= px <= ox + x + 40 and oy + 3760 <= py <= oy + 3970: return True
     return False
 
@@ -193,13 +193,13 @@ def check_box_collision_circle(cx, cy, radius=50):
         cly = max(ry, min(cy, ry + rh))
         return (cx - clx) ** 2 + (cy - cly) ** 2 < r * r
 
-    for y in [280, 430, 580]:
+    for y in [230, 430, 630]:
         if _overlap(cx, cy, radius, ox + 750,  oy + y - 40, 250, 80): return True
     if _overlap(cx, cy, radius, ox + 1820, oy + 180, 150, 500): return True
     if _overlap(cx, cy, radius, ox + 500, oy + 1230, 150, 500): return True
-    for y in [3420, 3570, 3720]:
+    for y in [3370, 3570, 3770]:
         if _overlap(cx, cy, radius, ox + 30,   oy + y - 40, 250, 80): return True
-    for x in [1100, 1400, 1700]:
+    for x in [1200, 1400, 1600]:
         if _overlap(cx, cy, radius, ox + x - 40, oy + 3760, 80, 210): return True
     return False
 

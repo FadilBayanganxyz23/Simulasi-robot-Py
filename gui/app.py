@@ -176,8 +176,13 @@ class CameraWindow(tk.Toplevel):
             hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
             
             # Simpan sample untuk auto calibration dari selection_box
+            h_img, w_img = img.shape[:2]
             x1, y1, x2, y2 = self.selection_box
-            self.current_hsv_sample = hsv[y1:y2, x1:x2].copy()
+            x1_s = max(0, min(w_img - 2, x1))
+            y1_s = max(0, min(h_img - 2, y1))
+            x2_s = max(x1_s + 2, min(w_img, x2))
+            y2_s = max(y1_s + 2, min(h_img, y2))
+            self.current_hsv_sample = hsv[y1_s:y2_s, x1_s:x2_s].copy()
             
             detected = "-"
             detected_color = (0, 0, 0)
@@ -437,6 +442,7 @@ class SequenceGUI:
 
         self._build_creator_frame(self.left_panel)
         self._build_notes_frame(self.left_panel)
+        self._build_stand_indicator_frame(self.left_panel)
         
         self.lbl_status = ttk.Label(
             self.left_panel, text="Status: Menghubungkan ke Pygame...",
@@ -464,6 +470,7 @@ class SequenceGUI:
                 "local odometry",
                 "global odometry",
                 "pwm",
+                "rotasi",
                 "delay",
                 "find coordinate",
                 "reset coordinate",
@@ -471,11 +478,17 @@ class SequenceGUI:
                 "balance kiri",
                 "balance depan kiri",
                 "ambil kubus",
-                "taruh kubus"
+                "taruh kubus",
+                "scan stand",
+                "scan almari",
+                "scan target",
+                "apakah diambil?",
+                "apakah ditaruh?",
+                "apakah full?"
             ],
             width=18
         )
-        self.entry_step_name.set("local odometry")
+        self.entry_step_name.set("delay")
         self.entry_step_name.grid(row=0, column=1, columnspan=5, sticky="ew", padx=2, pady=2)
 
         # Row 1: Vx, Vy, Vw side-by-side
@@ -548,6 +561,8 @@ class SequenceGUI:
 
         ttk.Button(btn_row, text="✏️ Edit",
                    command=self._load_step_for_editing).pack(side="left", fill="x", expand=True, padx=2)
+        ttk.Button(btn_row, text="📋 Copy",
+                   command=self._copy_draft_step).pack(side="left", fill="x", expand=True, padx=2)
         ttk.Button(btn_row, text="📥 Insert",
                    command=self._insert_step_to_draft).pack(side="left", fill="x", expand=True, padx=2)
         ttk.Button(btn_row, text="➖ Hapus",
@@ -602,46 +617,180 @@ class SequenceGUI:
         self._build_telemetry_frame(self.right_panel)
         self._build_status_frame(self.right_panel)
         self._build_queue_panels(self.right_panel)
+    def _build_stand_indicator_frame(self, parent):
+        self.stand_labels = {}
+        self.target_labels = {}
+        
+        # --- Frame P (Ruangan) ---
+        frame_p = ttk.LabelFrame(parent, text=" 📍 Stand Memory (Ruangan P) ")
+        frame_p.pack(fill="x", padx=10, pady=5)
+        
+        groups_p = ["P1", "P2", "P3"]
+        
+        ttk.Label(frame_p, text="", width=4).grid(row=0, column=0, padx=2, pady=2)
+        for c, s in enumerate(["S1", "S2", "S3"]):
+            ttk.Label(frame_p, text=s, font=("Segoe UI", 8, "bold")).grid(row=0, column=c+1, padx=2, pady=2, sticky="ew")
+            
+        for r, g in enumerate(groups_p):
+            ttk.Label(frame_p, text=g, font=("Segoe UI", 8, "bold")).grid(row=r+1, column=0, padx=2, pady=2, sticky="e")
+            for c, s in enumerate(["S1", "S2", "S3"]):
+                label_key = f"{g} {s}"
+                lbl = ttk.Label(frame_p, text=" EMPTY ", background="#444444", foreground="#ffffff", font=("Segoe UI", 7, "bold"), anchor="center")
+                lbl.bind("<Button-1>", lambda event, k=label_key: self._on_stand_click(k))
+                lbl.grid(row=r+1, column=c+1, padx=2, pady=2, sticky="nsew")
+                self.stand_labels[label_key] = lbl
+                
+        for c in range(1, 4):
+            frame_p.columnconfigure(c, weight=1)
+
+        # --- Frame A (Gudang Memory) ---
+        frame_a = ttk.LabelFrame(parent, text=" 📦 Stand Memory (Gudang A) ")
+        frame_a.pack(fill="x", padx=10, pady=5)
+        
+        groups_a = ["A1", "A2"]
+        
+        ttk.Label(frame_a, text="", width=4).grid(row=0, column=0, padx=2, pady=2)
+        for c, s in enumerate(["S1", "S2", "S3"]):
+            ttk.Label(frame_a, text=s, font=("Segoe UI", 8, "bold")).grid(row=0, column=c+1, padx=2, pady=2, sticky="ew")
+            
+        for r, g in enumerate(groups_a):
+            ttk.Label(frame_a, text=g, font=("Segoe UI", 8, "bold")).grid(row=r+1, column=0, padx=2, pady=2, sticky="e")
+            for c, s in enumerate(["S1", "S2", "S3"]):
+                label_key = f"{g} {s}"
+                lbl = ttk.Label(frame_a, text=" EMPTY ", background="#444444", foreground="#ffffff", font=("Segoe UI", 7, "bold"), anchor="center")
+                lbl.bind("<Button-1>", lambda event, k=label_key: self._on_stand_click(k))
+                lbl.grid(row=r+1, column=c+1, padx=2, pady=2, sticky="nsew")
+                self.stand_labels[label_key] = lbl
+                
+        for c in range(1, 4):
+            frame_a.columnconfigure(c, weight=1)
+
+        # --- Frame Target Almari (Gudang A Target) ---
+        frame_target = ttk.LabelFrame(parent, text=" 🎯 Target Almari (Gudang A) ")
+        frame_target.pack(fill="x", padx=10, pady=5)
+        
+        ttk.Label(frame_target, text="", width=4).grid(row=0, column=0, padx=2, pady=2)
+        for c, s in enumerate(["S1", "S2", "S3"]):
+            ttk.Label(frame_target, text=s, font=("Segoe UI", 8, "bold")).grid(row=0, column=c+1, padx=2, pady=2, sticky="ew")
+            
+        for r, g in enumerate(groups_a):
+            ttk.Label(frame_target, text=g, font=("Segoe UI", 8, "bold")).grid(row=r+1, column=0, padx=2, pady=2, sticky="e")
+            for c, s in enumerate(["S1", "S2", "S3"]):
+                label_key = f"{g} {s}"
+                lbl = ttk.Label(frame_target, text=" EMPTY ", background="#444444", foreground="#ffffff", font=("Segoe UI", 7, "bold"), anchor="center")
+                lbl.bind("<Button-1>", lambda event, k=label_key: self._on_target_click(k))
+                lbl.grid(row=r+1, column=c+1, padx=2, pady=2, sticky="nsew")
+                self.target_labels[label_key] = lbl
+                
+        for c in range(1, 4):
+            frame_target.columnconfigure(c, weight=1)
+
+    def _on_stand_click(self, label_key):
+        colors = ["EMPTY", "RED", "GREEN", "BLUE"]
+        current = self.manager.stand_memory.get(label_key, "EMPTY")
+        idx = colors.index(current) if current in colors else 0
+        next_color = colors[(idx + 1) % len(colors)]
+        self.manager.stand_memory[label_key] = next_color
+        
+        lbl = self.stand_labels[label_key]
+        if next_color == "RED":
+            lbl.config(background="#ff3333", text=" RED ")
+        elif next_color == "GREEN":
+            lbl.config(background="#33cc33", text=" GRN ")
+        elif next_color == "BLUE":
+            lbl.config(background="#3388ff", text=" BLU ")
+        else:
+            lbl.config(background="#444444", text=" EMPTY ")
+
+    def _on_target_click(self, label_key):
+        colors = ["EMPTY", "RED", "GREEN", "BLUE"]
+        current = self.manager.target_memory.get(label_key, "EMPTY")
+        idx = colors.index(current) if current in colors else 0
+        next_color = colors[(idx + 1) % len(colors)]
+        self.manager.target_memory[label_key] = next_color
+        
+        lbl = self.target_labels[label_key]
+        if next_color == "RED":
+            lbl.config(background="#ff3333", text=" RED ")
+        elif next_color == "GREEN":
+            lbl.config(background="#33cc33", text=" GRN ")
+        elif next_color == "BLUE":
+            lbl.config(background="#3388ff", text=" BLU ")
+        else:
+            lbl.config(background="#444444", text=" EMPTY ")
+                
+        # Make columns expandable
+        for c in range(1, 4):
+            frame.columnconfigure(c, weight=1)
+
     def _build_status_frame(self, parent):
-        frame = ttk.LabelFrame(parent, text=" 🏃 Sequence Execution Monitor ")
+        frame = ttk.LabelFrame(parent, text=" 🏃 Monitor Eksekusi Sekuens (3-Level Hierarchy) ")
         frame.pack(fill="x", padx=10, pady=5)
         
-        self.lbl_mon_status = ttk.Label(frame, text="💤 SYSTEM IDLE", font=("Segoe UI", 11, "bold"), foreground="#ffffff")
-        self.lbl_mon_status.pack(side="left", padx=15, pady=5)
+        row = ttk.Frame(frame)
+        row.pack(fill="x", padx=5, pady=4)
+
+        # 1. Status Execution Badge
+        self.lbl_mon_status = ttk.Label(row, text="💤 SYSTEM IDLE", font=("Segoe UI", 10, "bold"), background="#333333", foreground="#ffffff", padding=(8, 4))
+        self.lbl_mon_status.pack(side="left", padx=5)
+
+        # 2. Indikator Urutan Kombinasi Badge (Level 1)
+        self.lbl_mon_urutan = ttk.Label(row, text="🚀 Urutan: -", font=("Segoe UI", 10, "bold"), background="#4a2c7a", foreground="#ffffff", padding=(8, 4))
+        self.lbl_mon_urutan.pack(side="left", padx=5)
+
+        # 3. Indikator Kombinasi & Gerakan (Level 2 & 3)
+        self.lbl_mon_step = ttk.Label(row, text="Gerakan: -", font=("Segoe UI", 10, "bold"), foreground="#ffffff")
+        self.lbl_mon_step.pack(side="left", expand=True, fill="x", padx=10)
         
-        self.lbl_mon_step = ttk.Label(frame, text="Gerakan: -", font=("Segoe UI", 10, "bold"), foreground="#ffffff")
-        self.lbl_mon_step.pack(side="left", expand=True, fill="x", padx=15, pady=5)
-        
-        self.lbl_mon_limit = ttk.Label(frame, text="Progress: -", font=("Segoe UI", 10, "bold"), foreground="#ffffff")
-        self.lbl_mon_limit.pack(side="right", padx=15, pady=5)
+        # 4. Indikator Limit & Progres
+        self.lbl_mon_limit = ttk.Label(row, text="Progress: -", font=("Segoe UI", 10, "bold"), foreground="#ffffff")
+        self.lbl_mon_limit.pack(side="right", padx=5)
     def _build_selector_frame(self, parent):
-        frame = ttk.LabelFrame(parent, text=" Pilih Variabel Kombinasi Gerakan ")
+        frame = ttk.LabelFrame(parent, text=" 🗂️ Manajemen Hierarki: Urutan Kombinasi -> Kombinasi -> Gerakan ")
         frame.pack(fill="x", padx=5, pady=5)
 
-        # Row 1: Dropdown selection + Add button
+        # --- Row 1: Level 1 - Urutan Kombinasi ---
         row1 = ttk.Frame(frame)
         row1.pack(fill="x", padx=5, pady=2)
-        ttk.Label(row1, text="Kombinasi:").pack(side="left", padx=5, pady=2)
+        ttk.Label(row1, text="Urutan Kombinasi:", font=("Segoe UI", 9, "bold")).pack(side="left", padx=5, pady=2)
+        
+        self.var_urutan = tk.StringVar()
+        self.dropdown_urutan = ttk.Combobox(
+            row1, textvariable=self.var_urutan,
+            values=list(self.manager.urutan_kombinasi.keys()) if hasattr(self.manager, 'urutan_kombinasi') else [],
+            state="readonly", width=22
+        )
+        self.dropdown_urutan.pack(side="left", padx=5, pady=2)
+        self.dropdown_urutan.bind("<<ComboboxSelected>>", self._on_urutan_selected)
+        
+        ttk.Button(row1, text="➕ Urutan Baru",   command=self._new_urutan).pack(side="left", padx=3)
+        ttk.Button(row1, text="💾 Simpan Urutan", command=self._save_current_urutan).pack(side="left", padx=3)
+        ttk.Button(row1, text="🗑️ Hapus Urutan",  command=self._delete_urutan).pack(side="left", padx=3)
+
+        # --- Row 2: Level 2 - Kombinasi Gerakan ---
+        row2 = ttk.Frame(frame)
+        row2.pack(fill="x", padx=5, pady=2)
+        ttk.Label(row2, text="Pilih Kombinasi:", font=("Segoe UI", 9, "bold")).pack(side="left", padx=5, pady=2)
         
         self.var_combo = tk.StringVar()
         self.dropdown_kombinasi = ttk.Combobox(
-            row1, textvariable=self.var_combo,
+            row2, textvariable=self.var_combo,
             values=list(self.manager.kombinasi_gerakan.keys()),
-            state="readonly", width=25
+            state="readonly", width=22
         )
         self.dropdown_kombinasi.pack(side="left", padx=5, pady=2)
+        
+        ttk.Button(row2, text="➕ Tambah ke Urutan", command=self._add_to_queue).pack(side="left", padx=3)
+        ttk.Button(row2, text="✏️ Edit Kombinasi",   command=self._load_preset_to_draft).pack(side="left", padx=3)
+        ttk.Button(row2, text="🗑️ Hapus Kombinasi",  command=self._delete_preset).pack(side="left", padx=3)
+        ttk.Button(row2, text="🔄 Reload JSON",       command=self._reload_presets).pack(side="left", padx=3)
+
+        if hasattr(self.manager, 'urutan_kombinasi') and self.manager.urutan_kombinasi:
+            self.dropdown_urutan.current(0)
+            if hasattr(self, 'tree_kiri'):
+                self._on_urutan_selected(None)
         if self.manager.kombinasi_gerakan:
             self.dropdown_kombinasi.current(0)
-
-        ttk.Button(row1, text="➕ Tambah ke Urutan", command=self._add_to_queue).pack(side="left", padx=5)
-
-        # Row 2: Preset actions
-        row2 = ttk.Frame(frame)
-        row2.pack(fill="x", padx=5, pady=2)
-        
-        ttk.Button(row2, text="✏️ Edit Preset",       command=self._load_preset_to_draft).pack(side="left", padx=5)
-        ttk.Button(row2, text="🗑️ Hapus Preset",      command=self._delete_preset).pack(side="left", padx=5)
-        ttk.Button(row2, text="🔄 Reload JSON",        command=self._reload_presets).pack(side="left", padx=5)
 
     def _build_telemetry_frame(self, parent):
         frame = ttk.LabelFrame(parent, text=" 📡 Live Telemetry & Odometry Dashboard ")
@@ -725,21 +874,23 @@ class SequenceGUI:
         else:
             self.camera_window._on_close()
 
+    def open_camera(self):
+        if self.camera_window is None or not self.camera_window.winfo_exists():
+            self._toggle_camera()
+            
+    def close_camera(self):
+        if self.camera_window is not None and self.camera_window.winfo_exists():
+            self._toggle_camera()
+
     def _on_camera_close(self):
         self.camera_window = None
         self.btn_camera.config(text="📷 Buka Kamera")
 
-    def _on_storage_slot_click(self, slot_idx):
-        mon = self.manager.active_step_info
-        if mon.get("status") == "RUNNING":
-            return  # Jangan izinkan edit saat sequence berjalan
-
-        # Dapatkan list warna saat ini, pad dengan "-" sampai 8 slot
+    def _toggle_storage_slot(self, slot_idx):
         current_colors = list(self.manager.storage_colors)
         while len(current_colors) < 8:
             current_colors.append("-")
         
-        # Logic siklus warna: "-" -> "R" -> "G" -> "B" -> "-"
         cycle = ["-", "R", "G", "B"]
         current = current_colors[slot_idx]
         if current not in cycle:
@@ -748,11 +899,8 @@ class SequenceGUI:
         next_idx = (cycle.index(current) + 1) % len(cycle)
         current_colors[slot_idx] = cycle[next_idx]
         
-        # Perbarui state GUI secara instan
         self.manager.storage_colors = current_colors
         self.manager.storage_count = sum(1 for c in current_colors if c != "-")
-        
-        # Kirim perintah update storage ke simulator
         self.manager.set_storage_manual(current_colors)
 
     def _reset_storage(self):
@@ -765,32 +913,52 @@ class SequenceGUI:
         paned = ttk.PanedWindow(parent, orient=tk.HORIZONTAL)
         paned.pack(fill="both", expand=True, padx=5, pady=5)
 
-        # Kiri: antrean kombinasi
-        frame_kiri = ttk.LabelFrame(paned, text=" Urutan Antrean Kombinasi ")
+        # --- 1. Paling Kiri: Level 1 - Daftar Urutan Kombinasi ---
+        frame_urutan = ttk.LabelFrame(paned, text=" 📋 Daftar Urutan Kombinasi (Level 1) ")
+        paned.add(frame_urutan, weight=1)
+
+        urutan_btn_frame = ttk.Frame(frame_urutan)
+        urutan_btn_frame.pack(side="bottom", fill="x", padx=5, pady=5)
+        ttk.Button(urutan_btn_frame, text="➕ Baru", command=self._new_urutan).pack(side="left", padx=2, expand=True, fill="x")
+        ttk.Button(urutan_btn_frame, text="📌 Insert", command=self._insert_urutan).pack(side="left", padx=2, expand=True, fill="x")
+        ttk.Button(urutan_btn_frame, text="📋 Copy", command=self._copy_urutan).pack(side="left", padx=2, expand=True, fill="x")
+        ttk.Button(urutan_btn_frame, text="🗑 Hapus", command=self._delete_urutan).pack(side="right", padx=2, expand=True, fill="x")
+
+        self.tree_urutan = ttk.Treeview(
+            frame_urutan, columns=("no", "urutan"), show="headings"
+        )
+        self.tree_urutan.heading("no",     text="No")
+        self.tree_urutan.heading("urutan", text="Nama Urutan Kombinasi")
+        self.tree_urutan.column("no",     width=35, anchor="center")
+        self.tree_urutan.column("urutan", width=140, anchor="w")
+        self.tree_urutan.pack(fill="both", expand=True, padx=5, pady=5)
+        self.tree_urutan.bind("<<TreeviewSelect>>", self._on_urutan_tree_select)
+
+        # --- 2. Tengah: Level 2 - Urutan Antrean Kombinasi ---
+        frame_kiri = ttk.LabelFrame(paned, text=" 📦 Urutan Antrean Kombinasi (Level 2) ")
         paned.add(frame_kiri, weight=1)
 
-        # Button frame at the bottom of frame_kiri
         kiri_btn_frame = ttk.Frame(frame_kiri)
         kiri_btn_frame.pack(side="bottom", fill="x", padx=5, pady=5)
-        
-        ttk.Button(kiri_btn_frame, text="➖ Hapus Pilihan", command=self._delete_selected_macro).pack(side="left", padx=2, expand=True, fill="x")
-        ttk.Button(kiri_btn_frame, text="🗑 Clear Semua", command=self._clear_sequence).pack(side="right", padx=2, expand=True, fill="x")
+        ttk.Button(kiri_btn_frame, text="📌 Insert", command=self._insert_to_queue).pack(side="left", padx=2, expand=True, fill="x")
+        ttk.Button(kiri_btn_frame, text="📋 Copy", command=self._copy_kombinasi_queue).pack(side="left", padx=2, expand=True, fill="x")
+        ttk.Button(kiri_btn_frame, text="➖ Hapus", command=self._delete_selected_macro).pack(side="left", padx=2, expand=True, fill="x")
+        ttk.Button(kiri_btn_frame, text="🗑 Clear", command=self._clear_sequence).pack(side="right", padx=2, expand=True, fill="x")
 
         self.tree_kiri = ttk.Treeview(
             frame_kiri, columns=("no", "kombinasi"), show="headings"
         )
         self.tree_kiri.heading("no",         text="No")
         self.tree_kiri.heading("kombinasi",  text="Nama Variabel Kombinasi")
-        self.tree_kiri.column("no",          width=40,  anchor="center")
-        self.tree_kiri.column("kombinasi",   width=180, anchor="w")
+        self.tree_kiri.column("no",          width=35,  anchor="center")
+        self.tree_kiri.column("kombinasi",   width=140, anchor="w")
         self.tree_kiri.pack(fill="both", expand=True, padx=5, pady=5)
         self.tree_kiri.bind("<<TreeviewSelect>>", self._on_kiri_select)
 
-        # Kanan: detail langkah
-        frame_kanan = ttk.LabelFrame(paned, text=" Detail Isi Gerakan ")
+        # --- 3. Paling Kanan: Level 3 - Detail Isi Gerakan ---
+        frame_kanan = ttk.LabelFrame(paned, text=" ⚙️ Detail Isi Gerakan (Level 3) ")
         paned.add(frame_kanan, weight=2)
 
-        # Button frame at the bottom of frame_kanan
         kanan_btn_frame = ttk.Frame(frame_kanan)
         kanan_btn_frame.pack(side="bottom", fill="x", padx=5, pady=5)
 
@@ -820,6 +988,8 @@ class SequenceGUI:
                                    anchor="center" if col != "nama" else "w")
         self.tree_kanan.pack(fill="both", expand=True, padx=5, pady=5)
 
+        self._refresh_tree_urutan()
+
 
     # ------------------------------------------------------------------
     # Polling Telemetri (dipanggil via after())
@@ -832,8 +1002,8 @@ class SequenceGUI:
             deg  = math.degrees(-pos["angle"]) % 360.0
             dist = pos.get("dist", 0.0) / 1000.0
 
-            self.lbl_tele_x.config(text=f"{y_cm:+.1f} cm")
-            self.lbl_tele_y.config(text=f"{x_cm:+.1f} cm")
+            self.lbl_tele_x.config(text=f"{x_cm:+.1f} cm")
+            self.lbl_tele_y.config(text=f"{y_cm:+.1f} cm")
             self.lbl_tele_w.config(text=f"{deg:.0f}°")
             self.lbl_tele_d.config(text=f"{dist:.2f} m")
 
@@ -865,6 +1035,32 @@ class SequenceGUI:
                     slot_lbl.config(foreground=color_map[s_colors[i]])
                 else:
                     slot_lbl.config(foreground="#333333")
+                    
+            # Update Stand Memory Indicator
+            if hasattr(self, 'stand_labels'):
+                for label_key, lbl in self.stand_labels.items():
+                    color = self.manager.stand_memory.get(label_key, "EMPTY")
+                    if color == "RED":
+                        lbl.config(background="#ff3333", text=" RED ")
+                    elif color == "GREEN":
+                        lbl.config(background="#33cc33", text=" GRN ")
+                    elif color == "BLUE":
+                        lbl.config(background="#3388ff", text=" BLU ")
+                    else:
+                        lbl.config(background="#444444", text=" EMPTY ")
+
+            # Update Target Memory Indicator
+            if hasattr(self, 'target_labels'):
+                for label_key, lbl in self.target_labels.items():
+                    color = self.manager.target_memory.get(label_key, "EMPTY")
+                    if color == "RED":
+                        lbl.config(background="#ff3333", text=" RED ")
+                    elif color == "GREEN":
+                        lbl.config(background="#33cc33", text=" GRN ")
+                    elif color == "BLUE":
+                        lbl.config(background="#3388ff", text=" BLU ")
+                    else:
+                        lbl.config(background="#444444", text=" EMPTY ")
         else:
             for lbl in (self.lbl_tele_x, self.lbl_tele_y,
                         self.lbl_tele_w, self.lbl_tele_d,
@@ -891,8 +1087,15 @@ class SequenceGUI:
         s_idx = mon.get("step_idx", 0)
         s_tot = mon.get("step_total", 0)
         
+        urutan_name = mon.get("urutan_name", self.var_urutan.get() if hasattr(self, 'var_urutan') else "-")
+        if not urutan_name or urutan_name == "-":
+            urutan_name = self.var_urutan.get() if hasattr(self, 'var_urutan') else "-"
+
+        if hasattr(self, 'lbl_mon_urutan'):
+            self.lbl_mon_urutan.config(text=f"🚀 Urutan: {urutan_name}")
+
         if status == "RUNNING":
-            self.lbl_mon_status.config(text="🏃 EXECUTING", foreground="#ffffff")
+            self.lbl_mon_status.config(text="🏃 EXECUTING", background="#28a745", foreground="#ffffff")
             self.lbl_mon_step.config(
                 text=f"Kombinasi ({q_idx}/{q_tot}): {kombinasi} ➔ Gerakan ({s_idx}/{s_tot}): {nama}"
             )
@@ -918,7 +1121,7 @@ class SequenceGUI:
             else:
                 self.lbl_mon_limit.config(text=f"Progress: {cval:.1f} / {lval:.1f}")
         else:
-            self.lbl_mon_status.config(text="💤 SYSTEM IDLE", foreground="#ffffff")
+            self.lbl_mon_status.config(text="💤 SYSTEM IDLE", background="#333333", foreground="#ffffff")
             self.lbl_mon_step.config(text="Gerakan: -")
             self.lbl_mon_limit.config(text="Progress: -")
         self.root.after(100, self._poll_telemetry)
@@ -1163,9 +1366,115 @@ class SequenceGUI:
                 self.dropdown_kombinasi.set("")
             self.lbl_status.config(text=f"Status: Preset '{nama}' dihapus.")
 
+    def _sync_active_urutan(self):
+        if hasattr(self, 'var_urutan'):
+            selected_urutan = self.var_urutan.get()
+            if selected_urutan:
+                self.manager.urutan_kombinasi[selected_urutan] = list(self.macro_sequence_queue)
+                self.manager.save_presets()
+                self._refresh_tree_urutan()
+
+    def _on_urutan_selected(self, event=None):
+        selected_urutan = self.var_urutan.get()
+        if selected_urutan in self.manager.urutan_kombinasi:
+            self.macro_sequence_queue = list(self.manager.urutan_kombinasi[selected_urutan])
+            self._refresh_tree_kiri()
+            
+            # Auto-update Level 3 (tree_kanan) dengan langkah dari kombinasi pertama
+            if self.macro_sequence_queue:
+                first_combo = self.macro_sequence_queue[0]
+                self._update_tree_kanan(first_combo)
+                if hasattr(self, 'tree_kiri'):
+                    children = self.tree_kiri.get_children()
+                    if children:
+                        self.tree_kiri.selection_set(children[0])
+            else:
+                if hasattr(self, 'tree_kanan'):
+                    for item in self.tree_kanan.get_children():
+                        self.tree_kanan.delete(item)
+
+    def _new_urutan(self):
+        from tkinter import simpledialog
+        nama = simpledialog.askstring("Urutan Kombinasi Baru", "Masukkan nama Urutan Kombinasi (Level 1):", parent=self.root)
+        if nama and nama.strip():
+            nama = nama.strip()
+            self.manager.urutan_kombinasi[nama] = list(self.macro_sequence_queue)
+            self.manager.save_presets()
+            self.dropdown_urutan["values"] = list(self.manager.urutan_kombinasi.keys())
+            self.var_urutan.set(nama)
+            self._on_urutan_selected(None)
+            self._refresh_tree_urutan()
+            messagebox.showinfo("Sukses", f"Urutan Kombinasi '{nama}' berhasil dibuat!")
+
+    def _insert_urutan(self):
+        from tkinter import simpledialog
+        sel = self.tree_urutan.selection() if hasattr(self, 'tree_urutan') else None
+        sel_idx = len(self.manager.urutan_kombinasi)
+        if sel:
+            sel_idx = self.tree_urutan.index(sel[0])
+
+        nama = simpledialog.askstring("Sisipkan Urutan Kombinasi", "Masukkan nama Urutan Kombinasi baru:", parent=self.root)
+        if nama and nama.strip():
+            nama = nama.strip()
+            old_items = list(self.manager.urutan_kombinasi.items())
+            new_dict = {}
+            inserted = False
+            for i, (k, v) in enumerate(old_items):
+                if i == sel_idx:
+                    new_dict[nama] = []
+                    inserted = True
+                new_dict[k] = v
+            if not inserted:
+                new_dict[nama] = []
+            
+            self.manager.urutan_kombinasi = new_dict
+            self.manager.save_presets()
+            self.dropdown_urutan["values"] = list(self.manager.urutan_kombinasi.keys())
+            self.var_urutan.set(nama)
+            self._on_urutan_selected(None)
+            self._refresh_tree_urutan()
+            messagebox.showinfo("Sukses", f"Urutan Kombinasi '{nama}' berhasil disisipkan di posisi #{sel_idx + 1}!")
+
+    def _save_current_urutan(self):
+        selected_urutan = self.var_urutan.get()
+        if not selected_urutan:
+            self._new_urutan()
+            return
+        self.manager.urutan_kombinasi[selected_urutan] = list(self.macro_sequence_queue)
+        self.manager.save_presets()
+        self._refresh_tree_urutan()
+        messagebox.showinfo("Sukses", f"Urutan Kombinasi '{selected_urutan}' berhasil disimpan ke presets.json!")
+
+    def _delete_urutan(self):
+        selected = self.var_urutan.get()
+        if not selected:
+            return
+        if messagebox.askyesno("Konfirmasi Hapus", f"Apakah Anda yakin ingin menghapus Urutan Kombinasi '{selected}'?"):
+            if selected in self.manager.urutan_kombinasi:
+                del self.manager.urutan_kombinasi[selected]
+                self.manager.save_presets()
+                self.dropdown_urutan["values"] = list(self.manager.urutan_kombinasi.keys())
+                if self.manager.urutan_kombinasi:
+                    self.dropdown_urutan.current(0)
+                    self._on_urutan_selected(None)
+                else:
+                    self.dropdown_urutan.set("")
+                    self.macro_sequence_queue.clear()
+                    self._refresh_tree_kiri()
+                self._refresh_tree_urutan()
+
     def _reload_presets(self):
         self.manager.load_presets()
+        self.dropdown_urutan["values"] = list(self.manager.urutan_kombinasi.keys())
         self.dropdown_kombinasi["values"] = list(self.manager.kombinasi_gerakan.keys())
+        self._refresh_tree_urutan()
+        
+        if self.manager.urutan_kombinasi:
+            self.dropdown_urutan.current(0)
+            self._on_urutan_selected(None)
+        else:
+            self.dropdown_urutan.set("")
+
         if self.manager.kombinasi_gerakan:
             self.dropdown_kombinasi.current(0)
             self._update_tree_kanan(self.var_combo.get())
@@ -1176,8 +1485,6 @@ class SequenceGUI:
         self.lbl_status.config(text="Status: Preset dimuat ulang dari presets.json!")
         messagebox.showinfo("Sukses", "Preset berhasil dimuat ulang dari presets.json!")
 
-
-
     # ------------------------------------------------------------------
     # Event Handlers: Antrean Makro
     # ------------------------------------------------------------------
@@ -1186,34 +1493,132 @@ class SequenceGUI:
         nama = self.var_combo.get()
         if nama in self.manager.kombinasi_gerakan:
             self.macro_sequence_queue.append(nama)
+            self._sync_active_urutan()
             self._refresh_tree_kiri()
+            self._update_tree_kanan(nama)
+
+    def _insert_to_queue(self):
+        nama = self.var_combo.get()
+        if not nama or nama not in self.manager.kombinasi_gerakan:
+            messagebox.showwarning("Peringatan", "Pilih kombinasi gerakan dari library terlebih dahulu!")
+            return
+        
+        sel = self.tree_kiri.selection() if hasattr(self, 'tree_kiri') else None
+        if sel:
+            idx = self.tree_kiri.index(sel[0])
+            self.macro_sequence_queue.insert(idx, nama)
+        else:
+            self.macro_sequence_queue.append(nama)
+            
+        self._sync_active_urutan()
+        self._refresh_tree_kiri()
+        self._update_tree_kanan(nama)
+
+    def _copy_urutan(self):
+        from tkinter import simpledialog
+        nama_asal = self.var_urutan.get()
+        if not nama_asal or nama_asal not in self.manager.urutan_kombinasi:
+            messagebox.showwarning("Peringatan", "Pilih Urutan Kombinasi di Level 1 yang ingin di-copy!")
+            return
+        
+        nama_baru = simpledialog.askstring("Copy Urutan Kombinasi", f"Masukkan nama Urutan Kombinasi baru (salinan dari '{nama_asal}'):", 
+                                           initialvalue=f"{nama_asal}_copy", parent=self.root)
+        if nama_baru and nama_baru.strip():
+            nama_baru = nama_baru.strip()
+            queue_copy = list(self.manager.urutan_kombinasi[nama_asal])
+            self.manager.urutan_kombinasi[nama_baru] = queue_copy
+            self.manager.save_presets()
+            self.dropdown_urutan["values"] = list(self.manager.urutan_kombinasi.keys())
+            self.var_urutan.set(nama_baru)
+            self._on_urutan_selected(None)
+            self._refresh_tree_urutan()
+            messagebox.showinfo("Sukses", f"Urutan Kombinasi '{nama_asal}' berhasil di-copy menjadi '{nama_baru}'!")
+
+    def _copy_preset_kombinasi(self):
+        from tkinter import simpledialog
+        nama_asal = self.var_combo.get()
+        if not nama_asal or nama_asal not in self.manager.kombinasi_gerakan:
+            messagebox.showwarning("Peringatan", "Pilih kombinasi dari library yang ingin di-copy!")
+            return
+        
+        nama_baru = simpledialog.askstring("Copy Preset Kombinasi", f"Masukkan nama kombinasi baru (salinan dari '{nama_asal}'):", 
+                                           initialvalue=f"{nama_asal}_copy", parent=self.root)
+        if nama_baru and nama_baru.strip():
+            nama_baru = nama_baru.strip()
+            steps_copy = [dict(g) for g in self.manager.kombinasi_gerakan[nama_asal]]
+            self.manager.kombinasi_gerakan[nama_baru] = steps_copy
+            self.manager.save_presets()
+            self.dropdown_kombinasi["values"] = list(self.manager.kombinasi_gerakan.keys())
+            self.var_combo.set(nama_baru)
+            self._update_tree_kanan(nama_baru)
+            messagebox.showinfo("Sukses", f"Preset Kombinasi '{nama_asal}' berhasil di-copy menjadi '{nama_baru}'!")
+
+    def _copy_kombinasi_queue(self):
+        sel = self.tree_kiri.selection()
+        if not sel:
+            messagebox.showwarning("Peringatan", "Pilih kombinasi di daftar antrean (Level 2) yang ingin di-copy!")
+            return
+        idx = self.tree_kiri.index(sel[0])
+        item_nama = self.macro_sequence_queue[idx]
+        self.macro_sequence_queue.insert(idx + 1, item_nama)
+        self._sync_active_urutan()
+        self._refresh_tree_kiri()
+        children = self.tree_kiri.get_children()
+        if idx + 1 < len(children):
+            self.tree_kiri.selection_set(children[idx + 1])
+
+    def _copy_draft_step(self):
+        sel = self.tree_draft.selection() if hasattr(self, 'tree_draft') else None
+        if not sel:
+            messagebox.showwarning("Peringatan", "Pilih langkah di daftar draft yang ingin di-copy!")
+            return
+        idx = self.tree_draft.index(sel[0])
+        step_to_copy = dict(self.draft_steps[idx])
+        self.draft_steps.insert(idx + 1, step_to_copy)
+        self._refresh_tree_draft()
+        children = self.tree_draft.get_children()
+        if idx + 1 < len(children):
+            self.tree_draft.selection_set(children[idx + 1])
 
     def _delete_selected_macro(self):
         sel = self.tree_kiri.selection()
         if not sel:
-            messagebox.showwarning("Peringatan", "Pilih kombinasi di daftar kiri!")
+            messagebox.showwarning("Peringatan", "Pilih kombinasi di daftar antrean!")
             return
         no = int(self.tree_kiri.item(sel[0], "values")[0])
         del self.macro_sequence_queue[no - 1]
+        self._sync_active_urutan()
+        self._refresh_tree_kiri()
+        if self.macro_sequence_queue:
+            self._update_tree_kanan(self.macro_sequence_queue[0])
+        else:
+            for item in self.tree_kanan.get_children():
+                self.tree_kanan.delete(item)
+
+    def _clear_sequence(self):
+        self.macro_sequence_queue.clear()
+        self._sync_active_urutan()
         self._refresh_tree_kiri()
         for item in self.tree_kanan.get_children():
             self.tree_kanan.delete(item)
 
-    def _clear_sequence(self):
-        self.macro_sequence_queue.clear()
-        self._refresh_tree_kiri()
-        for item in self.tree_kanan.get_children():
-            self.tree_kanan.delete(item)
+    def _select_urutan_in_ui(self, urutan_name):
+        if hasattr(self, 'var_urutan'):
+            self.var_urutan.set(urutan_name)
+            self._on_urutan_selected(None)
+            self._refresh_tree_urutan()
 
     def _start_execution(self):
         if not self.manager.pygame_socket:
             messagebox.showerror("Error", "Tidak terhubung ke Pygame!")
             return
-        if not self.macro_sequence_queue:
-            messagebox.showwarning("Peringatan", "Antrean kosong!")
+        if not self.manager.urutan_kombinasi:
+            messagebox.showwarning("Peringatan", "Daftar Urutan Kombinasi kosong!")
             return
-        t = threading.Thread(target=self.manager.execute_sequence,
-                             args=(self.macro_sequence_queue, 0, 0))
+
+        # Start from the first Urutan Kombinasi in Level 1
+        t = threading.Thread(target=self.manager.execute_full_hierarchy,
+                             args=(0, 0, 0))
         t.daemon = True
         t.start()
 
@@ -1221,26 +1626,36 @@ class SequenceGUI:
         if not self.manager.pygame_socket:
             messagebox.showerror("Error", "Tidak terhubung ke Pygame!")
             return
-        if not self.macro_sequence_queue:
-            messagebox.showwarning("Peringatan", "Antrean kosong!")
+        if not self.manager.urutan_kombinasi:
+            messagebox.showwarning("Peringatan", "Daftar Urutan Kombinasi kosong!")
             return
-        
-        # Cari kombinasi terpilih di tree_kiri
-        sel_kiri = self.tree_kiri.selection()
-        if not sel_kiri:
-            messagebox.showwarning("Peringatan", "Pilih salah satu kombinasi di antrean terlebih dahulu!")
-            return
-        start_combo_idx = self.tree_kiri.index(sel_kiri[0])
-        
-        # Cari langkah terpilih di tree_kanan (opsional, default ke langkah 0)
-        sel_kanan = self.tree_kanan.selection()
+
+        # 1. Cari urutan terpilih di tree_urutan
+        sel_urutan = self.tree_urutan.selection() if hasattr(self, 'tree_urutan') else None
+        start_urutan_idx = 0
+        if sel_urutan:
+            start_urutan_idx = self.tree_urutan.index(sel_urutan[0])
+        else:
+            selected_urutan = self.var_urutan.get()
+            urutan_keys = list(self.manager.urutan_kombinasi.keys())
+            if selected_urutan in urutan_keys:
+                start_urutan_idx = urutan_keys.index(selected_urutan)
+
+        # 2. Cari kombinasi terpilih di tree_kiri
+        sel_kiri = self.tree_kiri.selection() if hasattr(self, 'tree_kiri') else None
+        start_combo_idx = 0
+        if sel_kiri:
+            start_combo_idx = self.tree_kiri.index(sel_kiri[0])
+
+        # 3. Cari langkah terpilih di tree_kanan
+        sel_kanan = self.tree_kanan.selection() if hasattr(self, 'tree_kanan') else None
         start_step_idx = 0
         if sel_kanan:
             step_no = int(self.tree_kanan.item(sel_kanan[0], "values")[0])
             start_step_idx = step_no - 1
 
-        t = threading.Thread(target=self.manager.execute_sequence,
-                             args=(self.macro_sequence_queue, start_combo_idx, start_step_idx))
+        t = threading.Thread(target=self.manager.execute_full_hierarchy,
+                             args=(start_urutan_idx, start_combo_idx, start_step_idx))
         t.daemon = True
         t.start()
 
@@ -1248,7 +1663,29 @@ class SequenceGUI:
     # Helpers: Tree View
     # ------------------------------------------------------------------
 
+    def _refresh_tree_urutan(self):
+        if not hasattr(self, 'tree_urutan'):
+            return
+        for item in self.tree_urutan.get_children():
+            self.tree_urutan.delete(item)
+        if hasattr(self.manager, 'urutan_kombinasi'):
+            current_active = self.var_urutan.get() if hasattr(self, 'var_urutan') else ""
+            for i, nama in enumerate(self.manager.urutan_kombinasi.keys(), 1):
+                item_id = self.tree_urutan.insert("", "end", values=(i, nama))
+                if nama == current_active:
+                    self.tree_urutan.selection_set(item_id)
+
+    def _on_urutan_tree_select(self, event):
+        sel = self.tree_urutan.selection()
+        if sel:
+            nama_urutan = self.tree_urutan.item(sel[0], "values")[1]
+            if hasattr(self, 'var_urutan'):
+                self.var_urutan.set(nama_urutan)
+            self._on_urutan_selected(None)
+
     def _refresh_tree_kiri(self):
+        if not hasattr(self, 'tree_kiri'):
+            return
         for item in self.tree_kiri.get_children():
             self.tree_kiri.delete(item)
         for i, nama in enumerate(self.macro_sequence_queue, 1):

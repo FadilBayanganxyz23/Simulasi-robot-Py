@@ -170,20 +170,20 @@ def make_nav_state():
 
 
 def start_navigation(nav_state, robot, home_x, home_y,
-                     target_x, target_y, target_w=None):
+                     target_vx, target_vy, target_w=None):
     """
-    Mulai navigasi otomatis dari posisi robot saat ini ke (target_x, target_y).
+    Mulai navigasi otomatis dari posisi robot saat ini ke (target_vx, target_vy).
 
     Parameter:
         nav_state : dict state navigasi (akan dimodifikasi in-place)
         robot     : SimRobot
         home_x/y  : posisi HOME dalam koordinat world
-        target_x  : target Vx (Maju/Mundur) dalam mm, relatif ke HOME
-        target_y  : target Vy (Geser) dalam mm, relatif ke HOME
+        target_vx : Maju/Mundur dalam mm (Y relatif telemetry)
+        target_vy : Geser Kanan/Kiri dalam mm (X relatif telemetry)
         target_w  : target heading dalam derajat (None = tidak perlu rotasi)
     """
-    world_tx = target_x + home_x
-    world_ty = home_y - target_y
+    world_tx = home_x + target_vy
+    world_ty = home_y - target_vx
 
     path = find_path_astar((robot.orig_x, robot.orig_y), (world_tx, world_ty))
     if path:
@@ -192,8 +192,11 @@ def start_navigation(nav_state, robot, home_x, home_y,
         nav_state["is_navigating"] = True
         nav_state["target_w"]      = target_w
     else:
-        nav_state["is_navigating"] = False
-        nav_state["waypoints"]     = []
+        # Fallback direct waypoint jika A* tidak menemukan jalur atau terhalang tipis
+        nav_state["waypoints"]     = [(int(world_tx), int(world_ty))]
+        nav_state["index"]         = 0
+        nav_state["is_navigating"] = True
+        nav_state["target_w"]      = target_w
 
 
 def cancel_navigation(nav_state):

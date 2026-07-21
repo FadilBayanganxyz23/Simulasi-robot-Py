@@ -1,373 +1,1158 @@
 {
-    "Bentuk_L": [
-        {
-            "nama": "Maju",
-            "vx": 10,
-            "vy": 0,
-            "vw": 0,
-            "limit_type": "Waktu (s)",
-            "limit_val": 2.0
-        },
-        {
-            "nama": "Geser Kanan",
-            "vx": 0,
-            "vy": 10,
-            "vw": 0,
-            "limit_type": "Waktu (s)",
-            "limit_val": 1.5
-        },
-        {
-            "nama": "Serong Kanan",
-            "vx": 12,
-            "vy": 12,
-            "vw": 0,
-            "limit_type": "Waktu (s)",
-            "limit_val": 2.0
-        }
-    ],
-    "Rotasi_Kotak": [
-        {
-            "nama": "Maju",
-            "vx": 12,
-            "vy": 0,
-            "vw": 0,
-            "limit_type": "Waktu (s)",
-            "limit_val": 1.0
-        },
-        {
-            "nama": "Putar Balik",
-            "vx": 0,
-            "vy": 0,
-            "vw": 5,
-            "limit_type": "Sudut (\u00b0)",
-            "limit_val": 180.0
-        },
-        {
-            "nama": "Mundur",
-            "vx": -12,
-            "vy": 0,
-            "vw": 0,
-            "limit_type": "Waktu (s)",
-            "limit_val": 1.0
-        }
-    ],
-    "Kombinasi B": [
-        {
-            "nama": "Maju Cepat",
-            "vx": 15,
-            "vy": 0,
-            "vw": 0,
-            "limit_type": "Waktu (s)",
-            "limit_val": 1.5
-        },
-        {
-            "nama": "Putar Kanan",
-            "vx": 0,
-            "vy": 0,
-            "vw": 10,
-            "limit_type": "Sudut (\u00b0)",
-            "limit_val": 90.0
-        },
-        {
-            "nama": "Geser Kiri",
-            "vx": 0,
-            "vy": -10,
-            "vw": 0,
-            "limit_type": "Waktu (s)",
-            "limit_val": 1.5
-        }
-    ],
-    "MOVE P1": [
-        {
-            "nama": "find coordinate",
-            "vx": -660.0,
-            "vy": -100.0,
-            "vw": 180.0,
-            "limit_type": "Waktu (s)",
-            "limit_val": 0.0,
-            "keterangan": ""
-        },
-        {
-            "nama": "pwm",
-            "vx": 0.0,
-            "vy": -20.0,
-            "vw": 0.0,
-            "limit_type": "Sensor Garis",
-            "limit_val": 0.0,
-            "keterangan": ""
-        },
-        {
-            "nama": "ambil kubus",
-            "vx": 0.0,
-            "vy": 0.0,
-            "vw": 0.0,
-            "limit_type": "Waktu (s)",
-            "limit_val": 2.0,
-            "keterangan": ""
-        },
-        {
-            "nama": "find coordinate",
-            "vx": -650.0,
-            "vy": 240.0,
-            "vw": 180.0,
-            "limit_type": "Sensor Garis",
-            "limit_val": 0.0,
-            "keterangan": ""
-        },
-        {
-            "nama": "pwm",
-            "vx": 0.0,
-            "vy": -20.0,
-            "vw": 0.0,
-            "limit_type": "Sensor Garis",
-            "limit_val": 0.0,
-            "keterangan": ""
-        },
-        {
-            "nama": "ambil kubus",
-            "vx": 0.0,
-            "vy": 0.0,
-            "vw": 0.0,
-            "limit_type": "Waktu (s)",
-            "limit_val": 2.0,
-            "keterangan": ""
-        },
-        {
-            "nama": "find coordinate",
-            "vx": -650.0,
-            "vy": 516.0,
-            "vw": 180.0,
-            "limit_type": "Sensor Garis",
-            "limit_val": 0.0,
-            "keterangan": ""
-        },
-        {
-            "nama": "pwm",
-            "vx": 0.0,
-            "vy": -20.0,
-            "vw": 0.0,
-            "limit_type": "Sensor Garis",
-            "limit_val": 0.0,
-            "keterangan": ""
-        },
-        {
-            "nama": "ambil kubus",
-            "vx": 0.0,
-            "vy": 0.0,
-            "vw": 0.0,
-            "limit_type": "Waktu (s)",
-            "limit_val": 2.0,
-            "keterangan": ""
-        }
-    ],
-    "starting": [
-        {
-            "nama": "balance depan kiri",
-            "vx": 0.0,
-            "vy": 0.0,
-            "vw": 0.0,
-            "limit_type": "Sensor Garis",
-            "limit_val": 0.0,
-            "keterangan": ""
-        },
-        {
-            "nama": "reset coordinate",
-            "vx": 0.0,
-            "vy": 0.0,
-            "vw": 0.0,
-            "limit_type": "Sensor Garis",
-            "limit_val": 0.0,
-            "keterangan": ""
-        }
-    ],
-    "home to A": [
-        {
-            "nama": "find coordinate",
-            "vx": -590.0,
-            "vy": 290.0,
-            "vw": 0.0,
-            "limit_type": "Sensor Garis",
-            "limit_val": 0.0,
-            "keterangan": ""
-        },
-        {
-            "nama": "balance depan kiri",
-            "vx": 0.0,
-            "vy": 0.0,
-            "vw": 0.0,
-            "limit_type": "Sensor Garis",
-            "limit_val": 0.0,
-            "keterangan": ""
-        },
-        {
-            "nama": "rotasi",
-            "vx": 0.0,
-            "vy": 0.0,
-            "vw": 268.0,
-            "limit_type": "Sensor Garis",
-            "limit_val": 0.0,
-            "keterangan": ""
-        },
-        {
-            "nama": "rotasi",
-            "vx": 0.0,
-            "vy": 0.0,
-            "vw": 178.0,
-            "limit_type": "Sensor Garis",
-            "limit_val": 0.0,
-            "keterangan": ""
-        }
-    ],
-    "go to B": [
-        {
-            "nama": "find coordinate",
-            "vx": -754.0,
-            "vy": -531.0,
-            "vw": 180.0,
-            "limit_type": "Waktu (s)",
-            "limit_val": 2.0,
-            "keterangan": ""
-        },
-        {
-            "nama": "balance depan kiri",
-            "vx": 0.0,
-            "vy": 0.0,
-            "vw": 0.0,
-            "limit_type": "Waktu (s)",
-            "limit_val": 2.0,
-            "keterangan": ""
-        },
-        {
-            "nama": "rotasi",
-            "vx": 0.0,
-            "vy": 0.0,
-            "vw": 88.0,
-            "limit_type": "Waktu (s)",
-            "limit_val": 2.0,
-            "keterangan": ""
-        }
-    ],
-    "MOVE P2": [
-        {
-            "nama": "find coordinate",
-            "vx": -897.0,
-            "vy": -521.0,
-            "vw": 90.0,
-            "limit_type": "Waktu (s)",
-            "limit_val": 2.0,
-            "keterangan": ""
-        },
-        {
-            "nama": "pwm",
-            "vx": 0.0,
-            "vy": -20.0,
-            "vw": 0.0,
-            "limit_type": "Sensor Garis",
-            "limit_val": 2.0,
-            "keterangan": ""
-        },
-        {
-            "nama": "taruh kubus",
-            "vx": 0.0,
-            "vy": 0.0,
-            "vw": 2.0,
-            "limit_type": "Sensor Garis",
-            "limit_val": 2.0,
-            "keterangan": ""
-        },
-        {
-            "nama": "find coordinate",
-            "vx": -897.0,
-            "vy": -521.0,
-            "vw": 90.0,
-            "limit_type": "Sensor Garis",
-            "limit_val": 2.0,
-            "keterangan": ""
-        },
-        {
-            "nama": "pwm ",
-            "vx": 0.0,
-            "vy": 20.0,
-            "vw": 0.0,
-            "limit_type": "Sensor Garis",
-            "limit_val": 2.0,
-            "keterangan": ""
-        },
-        {
-            "nama": "ambil kubus",
-            "vx": 0.0,
-            "vy": 0.0,
-            "vw": 0.0,
-            "limit_type": "Sensor Garis",
-            "limit_val": 2.0,
-            "keterangan": ""
-        },
-        {
-            "nama": "find coordinate",
-            "vx": -729.0,
-            "vy": -521.0,
-            "vw": 90.0,
-            "limit_type": "Sensor Garis",
-            "limit_val": 0.0,
-            "keterangan": ""
-        },
-        {
-            "nama": "pwm",
-            "vx": 0.0,
-            "vy": 20.0,
-            "vw": 0.0,
-            "limit_type": "Sensor Garis",
-            "limit_val": 0.0,
-            "keterangan": ""
-        },
-        {
-            "nama": "ambil kubus",
-            "vx": 0.0,
-            "vy": 20.0,
-            "vw": 0.0,
-            "limit_type": "Sensor Garis",
-            "limit_val": 0.0,
-            "keterangan": ""
-        }
-    ],
-    "go to home": [
-        {
-            "nama": "find coordinate",
-            "vx": 0.0,
-            "vy": 0.0,
-            "vw": 0.0,
-            "limit_type": "Waktu (s)",
-            "limit_val": 2.0,
-            "keterangan": ""
-        }
-    ],
-    "tes": [
-        {
-            "nama": "reset coordinate",
-            "vx": 10.0,
-            "vy": 0.0,
-            "vw": null,
-            "limit_type": "Waktu (s)",
-            "limit_val": 2.0,
-            "keterangan": ""
-        },
-        {
-            "nama": "global odometry",
-            "vx": 0.0,
-            "vy": 600.0,
-            "vw": null,
-            "limit_type": "Waktu (s)",
-            "limit_val": 2.0,
-            "keterangan": ""
-        },
-        {
-            "nama": "global odometry",
-            "vx": 1000.0,
-            "vy": 600.0,
-            "vw": null,
-            "limit_type": "Waktu (s)",
-            "limit_val": 2.0,
-            "keterangan": ""
-        }
-    ]
+    "kombinasi_gerakan": {
+        "Bentuk_L": [
+            {
+                "nama": "Maju",
+                "vx": 10,
+                "vy": 0,
+                "vw": 0,
+                "limit_type": "Waktu (s)",
+                "limit_val": 2.0
+            },
+            {
+                "nama": "Geser Kanan",
+                "vx": 0,
+                "vy": 10,
+                "vw": 0,
+                "limit_type": "Waktu (s)",
+                "limit_val": 1.5
+            },
+            {
+                "nama": "Serong Kanan",
+                "vx": 12,
+                "vy": 12,
+                "vw": 0,
+                "limit_type": "Waktu (s)",
+                "limit_val": 2.0
+            }
+        ],
+        "Rotasi_Kotak": [
+            {
+                "nama": "Maju",
+                "vx": 12,
+                "vy": 0,
+                "vw": 0,
+                "limit_type": "Waktu (s)",
+                "limit_val": 1.0
+            },
+            {
+                "nama": "Putar Balik",
+                "vx": 0,
+                "vy": 0,
+                "vw": 5,
+                "limit_type": "Sudut (\u00b0)",
+                "limit_val": 180.0
+            },
+            {
+                "nama": "Mundur",
+                "vx": -12,
+                "vy": 0,
+                "vw": 0,
+                "limit_type": "Waktu (s)",
+                "limit_val": 1.0
+            }
+        ],
+        "Kombinasi B": [
+            {
+                "nama": "Maju Cepat",
+                "vx": 15,
+                "vy": 0,
+                "vw": 0,
+                "limit_type": "Waktu (s)",
+                "limit_val": 1.5
+            },
+            {
+                "nama": "Putar Kanan",
+                "vx": 0,
+                "vy": 0,
+                "vw": 10,
+                "limit_type": "Sudut (\u00b0)",
+                "limit_val": 90.0
+            },
+            {
+                "nama": "Geser Kiri",
+                "vx": 0,
+                "vy": -10,
+                "vw": 0,
+                "limit_type": "Waktu (s)",
+                "limit_val": 1.5
+            }
+        ],
+        "MOVE P1": [
+            {
+                "nama": "find coordinate",
+                "vx": -660.0,
+                "vy": -100.0,
+                "vw": 180.0,
+                "limit_type": "Waktu (s)",
+                "limit_val": 0.0,
+                "keterangan": ""
+            },
+            {
+                "nama": "pwm",
+                "vx": 0.0,
+                "vy": -20.0,
+                "vw": 0.0,
+                "limit_type": "Sensor Garis",
+                "limit_val": 0.0,
+                "keterangan": ""
+            },
+            {
+                "nama": "ambil kubus",
+                "vx": 0.0,
+                "vy": 0.0,
+                "vw": 0.0,
+                "limit_type": "Waktu (s)",
+                "limit_val": 2.0,
+                "keterangan": ""
+            },
+            {
+                "nama": "find coordinate",
+                "vx": -650.0,
+                "vy": 240.0,
+                "vw": 180.0,
+                "limit_type": "Sensor Garis",
+                "limit_val": 0.0,
+                "keterangan": ""
+            },
+            {
+                "nama": "pwm",
+                "vx": 0.0,
+                "vy": -20.0,
+                "vw": 0.0,
+                "limit_type": "Sensor Garis",
+                "limit_val": 0.0,
+                "keterangan": ""
+            },
+            {
+                "nama": "ambil kubus",
+                "vx": 0.0,
+                "vy": 0.0,
+                "vw": 0.0,
+                "limit_type": "Waktu (s)",
+                "limit_val": 2.0,
+                "keterangan": ""
+            },
+            {
+                "nama": "find coordinate",
+                "vx": -650.0,
+                "vy": 516.0,
+                "vw": 180.0,
+                "limit_type": "Sensor Garis",
+                "limit_val": 0.0,
+                "keterangan": ""
+            },
+            {
+                "nama": "pwm",
+                "vx": 0.0,
+                "vy": -20.0,
+                "vw": 0.0,
+                "limit_type": "Sensor Garis",
+                "limit_val": 0.0,
+                "keterangan": ""
+            },
+            {
+                "nama": "ambil kubus",
+                "vx": 0.0,
+                "vy": 0.0,
+                "vw": 0.0,
+                "limit_type": "Waktu (s)",
+                "limit_val": 2.0,
+                "keterangan": ""
+            }
+        ],
+        "starting": [
+            {
+                "nama": "balance depan kiri",
+                "vx": 0.0,
+                "vy": 0.0,
+                "vw": 0.0,
+                "limit_type": "Waktu (s)",
+                "limit_val": 2.0,
+                "keterangan": ""
+            }
+        ],
+        "home to A": [
+            {
+                "nama": "find coordinate",
+                "vx": -741.0,
+                "vy": -10.0,
+                "vw": 0.0,
+                "limit_type": "Sensor Garis",
+                "limit_val": 0.0,
+                "keterangan": ""
+            },
+            {
+                "nama": "balance depan kiri",
+                "vx": 0.0,
+                "vy": 0.0,
+                "vw": 0.0,
+                "limit_type": "Waktu (s)",
+                "limit_val": 2.0,
+                "keterangan": ""
+            },
+            {
+                "nama": "rotasi",
+                "vx": 0.0,
+                "vy": 0.0,
+                "vw": 270.0,
+                "limit_type": "Sensor Garis",
+                "limit_val": 0.0,
+                "keterangan": ""
+            },
+            {
+                "nama": "rotasi",
+                "vx": 0.0,
+                "vy": 0.0,
+                "vw": 178.0,
+                "limit_type": "Sensor Garis",
+                "limit_val": 0.0,
+                "keterangan": ""
+            }
+        ],
+        "go to B": [
+            {
+                "nama": "find coordinate",
+                "vx": 1590.0,
+                "vy": 669.0,
+                "vw": 270.0,
+                "limit_type": "Waktu (s)",
+                "limit_val": 2.0,
+                "keterangan": ""
+            },
+            {
+                "nama": "balance depan kiri",
+                "vx": 0.0,
+                "vy": 0.0,
+                "vw": 0.0,
+                "limit_type": "Waktu (s)",
+                "limit_val": 2.0,
+                "keterangan": ""
+            },
+            {
+                "nama": "rotasi",
+                "vx": 0.0,
+                "vy": 0.0,
+                "vw": 0.0,
+                "limit_type": "Waktu (s)",
+                "limit_val": 0.0,
+                "keterangan": ""
+            },
+            {
+                "nama": "rotasi",
+                "vx": 0.0,
+                "vy": 0.0,
+                "vw": 92.0,
+                "limit_type": "Waktu (s)",
+                "limit_val": 0.0,
+                "keterangan": ""
+            }
+        ],
+        "MOVE P2": [
+            {
+                "nama": "find coordinate",
+                "vx": -897.0,
+                "vy": -521.0,
+                "vw": 90.0,
+                "limit_type": "Waktu (s)",
+                "limit_val": 2.0,
+                "keterangan": ""
+            },
+            {
+                "nama": "pwm",
+                "vx": 0.0,
+                "vy": -20.0,
+                "vw": 0.0,
+                "limit_type": "Sensor Garis",
+                "limit_val": 2.0,
+                "keterangan": ""
+            },
+            {
+                "nama": "taruh kubus",
+                "vx": 0.0,
+                "vy": 0.0,
+                "vw": 2.0,
+                "limit_type": "Sensor Garis",
+                "limit_val": 2.0,
+                "keterangan": ""
+            },
+            {
+                "nama": "find coordinate",
+                "vx": -897.0,
+                "vy": -521.0,
+                "vw": 90.0,
+                "limit_type": "Sensor Garis",
+                "limit_val": 2.0,
+                "keterangan": ""
+            },
+            {
+                "nama": "pwm ",
+                "vx": 0.0,
+                "vy": 20.0,
+                "vw": 0.0,
+                "limit_type": "Sensor Garis",
+                "limit_val": 2.0,
+                "keterangan": ""
+            },
+            {
+                "nama": "ambil kubus",
+                "vx": 0.0,
+                "vy": 0.0,
+                "vw": 0.0,
+                "limit_type": "Sensor Garis",
+                "limit_val": 2.0,
+                "keterangan": ""
+            },
+            {
+                "nama": "find coordinate",
+                "vx": -729.0,
+                "vy": -521.0,
+                "vw": 90.0,
+                "limit_type": "Sensor Garis",
+                "limit_val": 0.0,
+                "keterangan": ""
+            },
+            {
+                "nama": "pwm",
+                "vx": 0.0,
+                "vy": 20.0,
+                "vw": 0.0,
+                "limit_type": "Sensor Garis",
+                "limit_val": 0.0,
+                "keterangan": ""
+            },
+            {
+                "nama": "ambil kubus",
+                "vx": 0.0,
+                "vy": 20.0,
+                "vw": 0.0,
+                "limit_type": "Sensor Garis",
+                "limit_val": 0.0,
+                "keterangan": ""
+            }
+        ],
+        "go to home": [
+            {
+                "nama": "find coordinate",
+                "vx": 0.0,
+                "vy": 0.0,
+                "vw": 0.0,
+                "limit_type": "Waktu (s)",
+                "limit_val": 2.0,
+                "keterangan": ""
+            },
+            {
+                "nama": "balance depan kiri",
+                "vx": 0.0,
+                "vy": 0.0,
+                "vw": 0.0,
+                "limit_type": "Waktu (s)",
+                "limit_val": 2.0,
+                "keterangan": ""
+            }
+        ],
+        "tes": [
+            {
+                "nama": "scan target",
+                "vx": 0.0,
+                "vy": 0.0,
+                "vw": 0.0,
+                "limit_type": "Waktu (s)",
+                "limit_val": 2.0,
+                "keterangan": "A2"
+            }
+        ],
+        "go to A1": [
+            {
+                "nama": "find coordinate",
+                "vx": 1432.0,
+                "vy": 58.0,
+                "vw": 90.0,
+                "limit_type": "Waktu (s)",
+                "limit_val": 0.0,
+                "keterangan": "TO A1"
+            },
+            {
+                "nama": "scan target",
+                "vx": 1271.0,
+                "vy": -21.0,
+                "vw": 90.0,
+                "limit_type": "Waktu (s)",
+                "limit_val": 0.0,
+                "keterangan": "A1"
+            }
+        ],
+        "go to C": [
+            {
+                "nama": "find coordinate",
+                "vx": 2475.0,
+                "vy": 192.0,
+                "vw": 0.0,
+                "limit_type": "Waktu (s)",
+                "limit_val": 0.0,
+                "keterangan": ""
+            },
+            {
+                "nama": "balance depan kiri",
+                "vx": 0.0,
+                "vy": 0.0,
+                "vw": 0.0,
+                "limit_type": "Waktu (s)",
+                "limit_val": 2.0,
+                "keterangan": ""
+            },
+            {
+                "nama": "rotasi",
+                "vx": 0.0,
+                "vy": 0.0,
+                "vw": 268.0,
+                "limit_type": "Sudut (\u00b0)",
+                "limit_val": 90.0,
+                "keterangan": ""
+            }
+        ],
+        "scan A2": [
+            {
+                "nama": "find coordinate",
+                "vx": 2475.0,
+                "vy": 370.0,
+                "vw": 270.0,
+                "limit_type": "Waktu (s)",
+                "limit_val": 2.0,
+                "keterangan": "before line"
+            },
+            {
+                "nama": "pwm",
+                "vx": 0.0,
+                "vy": 20.0,
+                "vw": 0.0,
+                "limit_type": "Sensor Garis",
+                "limit_val": 2.0,
+                "keterangan": ""
+            },
+            {
+                "nama": "scan target",
+                "vx": 0.0,
+                "vy": 20.0,
+                "vw": 0.0,
+                "limit_type": "Sensor Garis",
+                "limit_val": 2.0,
+                "keterangan": "A2"
+            }
+        ],
+        "SCAN&AMBILP1": [
+            {
+                "nama": "pwm",
+                "vx": 0.0,
+                "vy": -20.0,
+                "vw": 0.0,
+                "limit_type": "Sensor Garis",
+                "limit_val": 0.0,
+                "keterangan": "S1"
+            },
+            {
+                "nama": "scan stand",
+                "vx": 0.0,
+                "vy": 0.0,
+                "vw": 0.0,
+                "limit_type": "Sensor Garis",
+                "limit_val": 0.0,
+                "keterangan": "P1 S1"
+            },
+            {
+                "nama": "apakah diambil?",
+                "vx": 0.0,
+                "vy": 0.0,
+                "vw": 0.0,
+                "limit_type": "Waktu (s)",
+                "limit_val": 2.0,
+                "keterangan": "P1 S1"
+            },
+            {
+                "nama": "ambil kubus",
+                "vx": 0.0,
+                "vy": 0.0,
+                "vw": 0.0,
+                "limit_type": "Waktu (s)",
+                "limit_val": 0.1,
+                "keterangan": "P1 S1"
+            },
+            {
+                "nama": "find coordinate",
+                "vx": -590.0,
+                "vy": 180.0,
+                "vw": 180.0,
+                "limit_type": "Sensor Garis",
+                "limit_val": 0.0,
+                "keterangan": ""
+            },
+            {
+                "nama": "pwm",
+                "vx": 0.0,
+                "vy": -20.0,
+                "vw": 0.0,
+                "limit_type": "Sensor Garis",
+                "limit_val": 0.0,
+                "keterangan": ""
+            },
+            {
+                "nama": "scan stand",
+                "vx": 0.0,
+                "vy": 0.0,
+                "vw": 0.0,
+                "limit_type": "Sensor Garis",
+                "limit_val": 0.0,
+                "keterangan": "P1 S2"
+            },
+            {
+                "nama": "apakah diambil?",
+                "vx": 0.0,
+                "vy": 0.0,
+                "vw": 0.0,
+                "limit_type": "Waktu (s)",
+                "limit_val": 2.0,
+                "keterangan": "P1 S2"
+            },
+            {
+                "nama": "delay",
+                "vx": 0.0,
+                "vy": 0.0,
+                "vw": 0.0,
+                "limit_type": "Waktu (s)",
+                "limit_val": 0.1,
+                "keterangan": "Dilewati (Tidak Cocok Target)"
+            },
+            {
+                "nama": "find coordinate",
+                "vx": -590.0,
+                "vy": 460.0,
+                "vw": 180.0,
+                "limit_type": "Sensor Garis",
+                "limit_val": 0.0,
+                "keterangan": ""
+            },
+            {
+                "nama": "pwm",
+                "vx": 0.0,
+                "vy": -20.0,
+                "vw": 0.0,
+                "limit_type": "Sensor Garis",
+                "limit_val": 0.0,
+                "keterangan": ""
+            },
+            {
+                "nama": "scan stand",
+                "vx": 0.0,
+                "vy": 0.0,
+                "vw": 0.0,
+                "limit_type": "Sensor Garis",
+                "limit_val": 0.0,
+                "keterangan": "P1 S3"
+            },
+            {
+                "nama": "apakah diambil?",
+                "vx": 0.0,
+                "vy": 0.0,
+                "vw": 0.0,
+                "limit_type": "Waktu (s)",
+                "limit_val": 2.0,
+                "keterangan": "P1 S3"
+            },
+            {
+                "nama": "ambil kubus",
+                "vx": 0.0,
+                "vy": 0.0,
+                "vw": 0.0,
+                "limit_type": "Waktu (s)",
+                "limit_val": 0.1,
+                "keterangan": "P1 S3"
+            }
+        ],
+        "full?": [
+            {
+                "nama": "apakah full?",
+                "vx": 0.0,
+                "vy": 0.0,
+                "vw": 0.0,
+                "limit_type": "Waktu (s)",
+                "limit_val": 2.0,
+                "keterangan": ""
+            }
+        ],
+        "go to D": [
+            {
+                "nama": "find coordinate",
+                "vx": -816.0,
+                "vy": -540.0,
+                "vw": 180.0,
+                "limit_type": "Waktu (s)",
+                "limit_val": 2.0,
+                "keterangan": ""
+            },
+            {
+                "nama": "balance depan kiri",
+                "vx": 0.0,
+                "vy": 0.0,
+                "vw": 0.0,
+                "limit_type": "Waktu (s)",
+                "limit_val": 3.0,
+                "keterangan": ""
+            },
+            {
+                "nama": "rotasi",
+                "vx": 0.0,
+                "vy": 0.0,
+                "vw": 88.0,
+                "limit_type": "Waktu (s)",
+                "limit_val": 0.0,
+                "keterangan": ""
+            }
+        ],
+        "SCAN&AMBIL P2": [
+            {
+                "nama": "pwm",
+                "vx": 0.0,
+                "vy": -20.0,
+                "vw": 0.0,
+                "limit_type": "Waktu (s)",
+                "limit_val": 1.0,
+                "keterangan": ""
+            },
+            {
+                "nama": "scan stand",
+                "vx": 0.0,
+                "vy": -20.0,
+                "vw": 0.0,
+                "limit_type": "Sensor Garis",
+                "limit_val": 0.0,
+                "keterangan": "P2 S1"
+            },
+            {
+                "nama": "apakah diambil?",
+                "vx": 0.0,
+                "vy": 0.0,
+                "vw": 0.0,
+                "limit_type": "Sensor Garis",
+                "limit_val": 0.0,
+                "keterangan": "P2 S1"
+            },
+            {
+                "nama": "ambil kubus",
+                "vx": 0.0,
+                "vy": 0.0,
+                "vw": 0.0,
+                "limit_type": "Waktu (s)",
+                "limit_val": 0.1,
+                "keterangan": "P2 S1"
+            },
+            {
+                "nama": "find coordinate",
+                "vx": -810.0,
+                "vy": -554.0,
+                "vw": 90.0,
+                "limit_type": "Sensor Garis",
+                "limit_val": 0.0,
+                "keterangan": ""
+            },
+            {
+                "nama": "PWM",
+                "vx": 0.0,
+                "vy": 20.0,
+                "vw": 0.0,
+                "limit_type": "Sensor Garis",
+                "limit_val": 0.0,
+                "keterangan": ""
+            },
+            {
+                "nama": "scan stand",
+                "vx": 0.0,
+                "vy": 20.0,
+                "vw": 0.0,
+                "limit_type": "Sensor Garis",
+                "limit_val": 0.0,
+                "keterangan": "P2 S2"
+            },
+            {
+                "nama": "apakah diambil?",
+                "vx": 0.0,
+                "vy": 20.0,
+                "vw": 0.0,
+                "limit_type": "Sensor Garis",
+                "limit_val": 0.0,
+                "keterangan": "P2 S2"
+            },
+            {
+                "nama": "delay",
+                "vx": 0.0,
+                "vy": 0.0,
+                "vw": 0.0,
+                "limit_type": "Waktu (s)",
+                "limit_val": 0.1,
+                "keterangan": "Dilewati (Tidak Cocok Target)"
+            },
+            {
+                "nama": "find coordinate",
+                "vx": -633.0,
+                "vy": -540.0,
+                "vw": 90.0,
+                "limit_type": "Sensor Garis",
+                "limit_val": 0.0,
+                "keterangan": ""
+            },
+            {
+                "nama": "pwm",
+                "vx": 0.0,
+                "vy": 20.0,
+                "vw": 0.0,
+                "limit_type": "Sensor Garis",
+                "limit_val": 0.0,
+                "keterangan": ""
+            },
+            {
+                "nama": "scan stand",
+                "vx": 0.0,
+                "vy": 20.0,
+                "vw": 0.0,
+                "limit_type": "Sensor Garis",
+                "limit_val": 0.0,
+                "keterangan": "P2 S3"
+            },
+            {
+                "nama": "apakah diambil?",
+                "vx": 0.0,
+                "vy": 20.0,
+                "vw": 0.0,
+                "limit_type": "Sensor Garis",
+                "limit_val": 0.0,
+                "keterangan": "P2 S3"
+            },
+            {
+                "nama": "ambil kubus",
+                "vx": 0.0,
+                "vy": 0.0,
+                "vw": 0.0,
+                "limit_type": "Waktu (s)",
+                "limit_val": 0.1,
+                "keterangan": "P2 S3"
+            }
+        ],
+        "go to E": [
+            {
+                "nama": "find coordinate",
+                "vx": 2448.0,
+                "vy": -769.0,
+                "vw": 0.0,
+                "limit_type": "Waktu (s)",
+                "limit_val": 2.0,
+                "keterangan": ""
+            },
+            {
+                "nama": "balance depan kiri",
+                "vx": 0.0,
+                "vy": 0.0,
+                "vw": 0.0,
+                "limit_type": "Waktu (s)",
+                "limit_val": 2.0,
+                "keterangan": ""
+            },
+            {
+                "nama": "rotasi",
+                "vx": 0.0,
+                "vy": 0.0,
+                "vw": 268.0,
+                "limit_type": "Waktu (s)",
+                "limit_val": 2.0,
+                "keterangan": ""
+            }
+        ],
+        "SCAN&AMBIL P3": [
+            {
+                "nama": "find coordinate",
+                "vx": 2568.0,
+                "vy": -643.0,
+                "vw": 270.0,
+                "limit_type": "Waktu (s)",
+                "limit_val": 2.0,
+                "keterangan": ""
+            },
+            {
+                "nama": "pwm",
+                "vx": 0.0,
+                "vy": -20.0,
+                "vw": 0.0,
+                "limit_type": "Waktu (s)",
+                "limit_val": 0.5,
+                "keterangan": ""
+            },
+            {
+                "nama": "scan stand",
+                "vx": 2478.0,
+                "vy": -643.0,
+                "vw": 270.0,
+                "limit_type": "Waktu (s)",
+                "limit_val": 2.0,
+                "keterangan": "P3 S1"
+            },
+            {
+                "nama": "apakah diambil?",
+                "vx": 0.0,
+                "vy": 0.0,
+                "vw": 0.0,
+                "limit_type": "Waktu (s)",
+                "limit_val": 2.0,
+                "keterangan": "P3 S1"
+            },
+            {
+                "nama": "delay",
+                "vx": 0.0,
+                "vy": 0.0,
+                "vw": 0.0,
+                "limit_type": "Waktu (s)",
+                "limit_val": 0.1,
+                "keterangan": "Dilewati (Tidak Cocok Target)"
+            },
+            {
+                "nama": "find coordinate",
+                "vx": 2568.0,
+                "vy": -643.0,
+                "vw": 270.0,
+                "limit_type": "Sensor Garis",
+                "limit_val": 2.0,
+                "keterangan": ""
+            },
+            {
+                "nama": "pwm",
+                "vx": 0.0,
+                "vy": 20.0,
+                "vw": 0.0,
+                "limit_type": "Sensor Garis",
+                "limit_val": 2.0,
+                "keterangan": ""
+            },
+            {
+                "nama": "scan stand",
+                "vx": 0.0,
+                "vy": 20.0,
+                "vw": 0.0,
+                "limit_type": "Sensor Garis",
+                "limit_val": 2.0,
+                "keterangan": "P3 S2"
+            },
+            {
+                "nama": "apakah diambil?",
+                "vx": 0.0,
+                "vy": 0.0,
+                "vw": 0.0,
+                "limit_type": "Waktu (s)",
+                "limit_val": 0.1,
+                "keterangan": "P3 S2"
+            },
+            {
+                "nama": "delay",
+                "vx": 0.0,
+                "vy": 0.0,
+                "vw": 0.0,
+                "limit_type": "Waktu (s)",
+                "limit_val": 0.1,
+                "keterangan": "Dilewati (Tidak Cocok Target)"
+            },
+            {
+                "nama": "find coordinate",
+                "vx": 2300.0,
+                "vy": -594.0,
+                "vw": 270.0,
+                "limit_type": "Sensor Garis",
+                "limit_val": 2.0,
+                "keterangan": ""
+            },
+            {
+                "nama": "pwm",
+                "vx": 0.0,
+                "vy": 20.0,
+                "vw": 0.0,
+                "limit_type": "Sensor Garis",
+                "limit_val": 2.0,
+                "keterangan": ""
+            },
+            {
+                "nama": "scan stand",
+                "vx": 0.0,
+                "vy": 0.0,
+                "vw": 0.0,
+                "limit_type": "Sensor Garis",
+                "limit_val": 2.0,
+                "keterangan": "P3 S3"
+            },
+            {
+                "nama": "apakah diambil?",
+                "vx": 0.0,
+                "vy": 29.0,
+                "vw": 9.0,
+                "limit_type": "Sensor Garis",
+                "limit_val": 2.0,
+                "keterangan": "P3 S3"
+            },
+            {
+                "nama": "ambil kubus",
+                "vx": 0.0,
+                "vy": 0.0,
+                "vw": 0.0,
+                "limit_type": "Waktu (s)",
+                "limit_val": 0.1,
+                "keterangan": "P3 S3"
+            }
+        ],
+        "TARUH A1": [
+            {
+                "nama": "find coordinate",
+                "vx": 1610.0,
+                "vy": -20.0,
+                "vw": 90.0,
+                "limit_type": "Waktu (s)",
+                "limit_val": 0.0,
+                "keterangan": ""
+            },
+            {
+                "nama": "pwm",
+                "vx": 0.0,
+                "vy": -20.0,
+                "vw": 0.0,
+                "limit_type": "Sensor Garis",
+                "limit_val": 0.0,
+                "keterangan": ""
+            },
+            {
+                "nama": "apakah ditaruh?",
+                "vx": 0.0,
+                "vy": -20.0,
+                "vw": 0.0,
+                "limit_type": "Sensor Garis",
+                "limit_val": 0.0,
+                "keterangan": "A1 S3"
+            },
+            {
+                "nama": "taruh kubus",
+                "vx": 0.0,
+                "vy": 0.0,
+                "vw": 0.0,
+                "limit_type": "Waktu (s)",
+                "limit_val": 4.0,
+                "keterangan": "A1 S3 (BLUE di S4)"
+            },
+            {
+                "nama": "find coordinate",
+                "vx": 1466.0,
+                "vy": -20.0,
+                "vw": 90.0,
+                "limit_type": "Sensor Garis",
+                "limit_val": 0.0,
+                "keterangan": ""
+            },
+            {
+                "nama": "pwm",
+                "vx": 0.0,
+                "vy": -20.0,
+                "vw": 0.0,
+                "limit_type": "Sensor Garis",
+                "limit_val": 0.0,
+                "keterangan": ""
+            },
+            {
+                "nama": "apakah ditaruh?",
+                "vx": 0.0,
+                "vy": 0.0,
+                "vw": 0.0,
+                "limit_type": "Sensor Garis",
+                "limit_val": 0.0,
+                "keterangan": "A1 S2"
+            },
+            {
+                "nama": "delay",
+                "vx": 0.0,
+                "vy": 0.0,
+                "vw": 0.0,
+                "limit_type": "Waktu (s)",
+                "limit_val": 0.1,
+                "keterangan": "Dilewati (A1 S2 Kosong / Tidak Butuh Kubus)"
+            },
+            {
+                "nama": "find coordinate",
+                "vx": 1274.0,
+                "vy": -20.0,
+                "vw": 90.0,
+                "limit_type": "Waktu (s)",
+                "limit_val": 0.0,
+                "keterangan": ""
+            },
+            {
+                "nama": "pwm",
+                "vx": 0.0,
+                "vy": -20.0,
+                "vw": 0.0,
+                "limit_type": "Sensor Garis",
+                "limit_val": 0.0,
+                "keterangan": ""
+            },
+            {
+                "nama": "apakah ditaruh?",
+                "vx": 0.0,
+                "vy": -20.0,
+                "vw": 0.0,
+                "limit_type": "Sensor Garis",
+                "limit_val": 0.0,
+                "keterangan": "A1 S1"
+            },
+            {
+                "nama": "taruh kubus",
+                "vx": 0.0,
+                "vy": -20.0,
+                "vw": 0.0,
+                "limit_type": "Sensor Garis",
+                "limit_val": 1.0,
+                "keterangan": "A1 S1 (RED di S1)"
+            }
+        ],
+        "Taruh A2": [
+            {
+                "nama": "find coordinate",
+                "vx": 2505.0,
+                "vy": 322.0,
+                "vw": 270.0,
+                "limit_type": "Waktu (s)",
+                "limit_val": 2.0,
+                "keterangan": ""
+            },
+            {
+                "nama": "pwm",
+                "vx": 0.0,
+                "vy": -20.0,
+                "vw": 0.0,
+                "limit_type": "Sensor Garis",
+                "limit_val": 2.0,
+                "keterangan": ""
+            },
+            {
+                "nama": "apakah ditaruh?",
+                "vx": 0.0,
+                "vy": 20.0,
+                "vw": 0.0,
+                "limit_type": "Sensor Garis",
+                "limit_val": 2.0,
+                "keterangan": "A2 S1"
+            },
+            {
+                "nama": "delay",
+                "vx": 0.0,
+                "vy": 0.0,
+                "vw": 0.0,
+                "limit_type": "Waktu (s)",
+                "limit_val": 0.0,
+                "keterangan": ""
+            },
+            {
+                "nama": "find coordinate",
+                "vx": 2505.0,
+                "vy": 322.0,
+                "vw": 270.0,
+                "limit_type": "Sensor Garis",
+                "limit_val": 2.0,
+                "keterangan": ""
+            },
+            {
+                "nama": "pwm",
+                "vx": 0.0,
+                "vy": 20.0,
+                "vw": 0.0,
+                "limit_type": "Sensor Garis",
+                "limit_val": 2.0,
+                "keterangan": ""
+            },
+            {
+                "nama": "apakah ditaruh?",
+                "vx": 0.0,
+                "vy": 0.0,
+                "vw": 0.0,
+                "limit_type": "Waktu (s)",
+                "limit_val": 0.0,
+                "keterangan": "A2 S2"
+            },
+            {
+                "nama": "delay",
+                "vx": 0.0,
+                "vy": 0.0,
+                "vw": 0.0,
+                "limit_type": "Waktu (s)",
+                "limit_val": 0.0,
+                "keterangan": ""
+            },
+            {
+                "nama": "find coordinate",
+                "vx": 2337.0,
+                "vy": 322.0,
+                "vw": 270.0,
+                "limit_type": "Waktu (s)",
+                "limit_val": 0.0,
+                "keterangan": ""
+            },
+            {
+                "nama": "pwm",
+                "vx": 0.0,
+                "vy": 20.0,
+                "vw": 0.0,
+                "limit_type": "Sensor Garis",
+                "limit_val": 0.0,
+                "keterangan": ""
+            },
+            {
+                "nama": "apakah ditaruh?",
+                "vx": 0.0,
+                "vy": 0.0,
+                "vw": 0.0,
+                "limit_type": "Waktu (s)",
+                "limit_val": 0.0,
+                "keterangan": "A2 S3"
+            },
+            {
+                "nama": "delay",
+                "vx": 0.0,
+                "vy": 0.0,
+                "vw": 0.0,
+                "limit_type": "Waktu (s)",
+                "limit_val": 0.0,
+                "keterangan": ""
+            }
+        ]
+    },
+    "urutan_kombinasi": {
+        "starting": [
+            "starting"
+        ],
+        "scaning almari": [
+            "go to B",
+            "go to A1",
+            "go to B",
+            "go to C",
+            "scan A2",
+            "go to home"
+        ],
+        "scaning dan ambil ruangan": [
+            "home to A",
+            "SCAN&AMBILP1",
+            "full?",
+            "go to D",
+            "SCAN&AMBIL P2",
+            "full?",
+            "go to E",
+            "SCAN&AMBIL P3"
+        ],
+        "taruh ke alamri": [
+            "go to B",
+            "TARUH A1",
+            "go to C",
+            "Taruh A2"
+        ],
+        "back to home": [
+            "go to home"
+        ]
+    }
 }
