@@ -1,129 +1,250 @@
 # ==============================================================================
-# BUKU PANDUAN FITUR - SIMULASI ROBOT OMNI & GUI CONTROLLER
+# BUKU PANDUAN FITUR, PARAMETER & CONTOH INPUT - SIMULASI ROBOT OMNI & GUI CONTROLLER
 # ==============================================================================
 
-Berikut adalah daftar lengkap fitur-fitur, pergerakan, dan pemrosesan otomatis 
-yang bisa dilakukan oleh robot di dalam simulasi, serta penjelasan fungsi-fungsinya.
+Berikut adalah daftar lengkap fitur, cara menjalankan, panduan parameter 
+(Vx, Vy, Vw, Limit, Keterangan), serta CONTOH PENGISIAN INPUT dan EFEK GERAKAN 
+pada masing-masing fitur simulasi robot omni & GUI controller.
 
 ------------------------------------------------------------------------------
-A. PERINTAH GERAKAN (COMMANDS)
+A. CARA MENJALANKAN SIMULASI & GUI CONTROLLER
 ------------------------------------------------------------------------------
 
-1. Local Odometry (Pergerakan Relatif)
-   - Deskripsi: Menggerakkan robot berdasarkan koordinat dirinya sendiri (lokal).
-     Vx positif akan membuat robot melaju ke depan, Vy positif membuat robot 
-     bergeser ke kanan, dan Vw mengatur rotasi.
-   - Nama Gerakan: "local odometry", "maju", "geser", "rotasi".
+1. Menjalankan Simulator Pygame:
+   - Jalankan script simulator (`simul_jalan.py` atau `main.py`).
+   - Simulator akan membuka layar arena Pygame, menginisialisasi robot omni, 
+     dan membuka server Socket komunikasi (port 5005).
 
-2. Global Odometry (Pergerakan Absolut)
-   - Deskripsi: Menggerakkan robot berdasarkan koordinat lapangan (global Pygame).
-     Arah atas/bawah/kiri/kanan lapangan akan selalu tetap, tidak peduli ke arah 
-     mana robot saat ini menghadap.
-   - Nama Gerakan: Harus mengandung kata "global odometry".
+2. Menjalankan GUI Controller:
+   - Jalankan GUI controller (`gui_controller.py` atau `python -m gui.app`).
+   - Pastikan indikator koneksi di GUI menunjukkan status "Connected".
+
+3. Menjalankan Sekuens Gerakan:
+   - Pilih / susun "Urutan Kombinasi" dan "Antrean Kombinasi".
+   - Klik tombol "Mulai" (Start) untuk mengeksekusi sekuens.
+   - Gunakan tombol "Start From" jika ingin mulai dari tahapan tertentu yang disorot.
+
+------------------------------------------------------------------------------
+B. PENJELASAN PARAMETER UTAMA (Vx, Vy, Vw, LIMIT, KETERANGAN)
+------------------------------------------------------------------------------
+
+1. Vx (Sumbu X / Maju-Mundur / Absolut X):
+   - Pada PWM & Local Odometry: Kecepatan relatif maju (+) atau mundur (-).
+   - Pada Find Coordinate & Global Odometry: Titik koordinat target X di lapangan Pygame.
+
+2. Vy (Sumbu Y / Geser Kanan-Kiri / Absolut Y):
+   - Pada PWM & Local Odometry: Kecepatan relatif geser kanan (+) atau geser kiri (-).
+   - Pada Find Coordinate & Global Odometry: Titik koordinat target Y di lapangan Pygame.
+
+3. Vw (Rotasi / Heading Angle):
+   - Pada PWM & Local Odometry: Kecepatan putar rotasi (+/-).
+   - Pada Rotasi / Find Coordinate / Global Odometry: Target sudut heading robot (0° - 360°).
+
+4. Tipe Limit & Nilai Limit:
+   - Waktu (s)               : Berjalan selama durasi X detik.
+   - Jarak (px / mm)         : Berjalan sejauh X pixel/mm.
+   - Sudut (°)               : Berputar hingga akumulasi sudut mencapai X derajat.
+   - Sensor Garis            : Berjalan terus hingga sensor mendeteksi garis putih.
+   - Sensor Jarak Depan (mm) : Berjalan hingga jarak ke dinding depan <= X mm.
+   - Sensor Jarak Kiri (mm)  : Berjalan hingga jarak ke dinding kiri <= X mm.
+
+5. Keterangan (Parameter Kontekstual):
+   - Diisi string label Stand (misal: "P1 S1"), slot Almari (misal: "A1 S3"), 
+     nama warna target ("RED", "GREEN", "BLUE"), atau nomor urutan lompatan (misal: "4").
+
+------------------------------------------------------------------------------
+C. CONTOH PENGISIAN PARAMETER & EFEK GERAKAN (COMMANDS)
+------------------------------------------------------------------------------
+
+1. Local Odometry (Pergerakan Relatif Robot)
+   - Deskripsi: Menggerakkan robot relatif terhadap arah posisi dirinya sendiri.
+   - Contoh Input:
+     * Nama       : local odometry (atau "maju")
+     * Vx         : 10.0
+     * Vy         : 0.0
+     * Vw         : 0.0
+     * Limit Type : Waktu (s)
+     * Limit Val  : 2.0
+     * Keterangan : -
+   - Apa Yang Terjadi: 
+     Robot bergerak MAJU lurus searah hadap dirinya sendiri dengan kecepatan 10 
+     selama 2.0 detik, lalu menghentikan roda dan me-reset odometry lokal.
+
+2. Global Odometry (Pergerakan Absolut Lapangan)
+   - Deskripsi: Menggerakkan robot ke posisi koordinat absolut lapangan.
+   - Contoh Input:
+     * Nama       : global odometry
+     * Vx         : 500.0
+     * Vy         : -200.0
+     * Vw         : 90.0
+     * Limit Type : Odometry
+     * Limit Val  : 0.0
+     * Keterangan : -
+   - Apa Yang Terjadi: 
+     Robot bergerak menuju titik X=500, Y=-200 di lapangan Pygame dan memutar badannya 
+     hingga menghadap sudut 90° (tegak lurus), tidak peduli posisi/sudut awal robot.
 
 3. PWM (Open Loop / Kecepatan Manual)
-   - Deskripsi: Menggerakkan motor tanpa membaca sensor posisi (tanpa PID lokal).
-     Angka Vx, Vy, Vw akan langsung dikonversi menjadi persentase PWM murni.
-   - Nama Gerakan: Harus mengandung kata "pwm".
+   - Deskripsi: Daya murni ke motor tanpa koreksi PID posisi.
+   - Contoh Input 1 (Maju Waktu):
+     * Nama       : pwm
+     * Vx         : 10.0
+     * Vy         : 0.0
+     * Vw         : 0.0
+     * Limit Type : Waktu (s)
+     * Limit Val  : 1.5
+     * Keterangan : -
+     * Apa Yang Terjadi: Motor diberi persentase daya PWM 10% melaju ke depan 
+       selama 1.5 detik.
+   - Contoh Input 2 (Geser Kiri Sampai Garis):
+     * Nama       : pwm
+     * Vx         : 0.0
+     * Vy         : -20.0
+     * Vw         : 0.0
+     * Limit Type : Sensor Garis
+     * Limit Val  : 0.0
+     * Keterangan : -
+     * Apa Yang Terjadi: Robot bergeser ke KIRI dengan daya PWM 20% terus-menerus 
+       sampai sensor garis kiri/kanan mendeteksi garis putih, lalu berhenti seketika.
 
 4. Delay (Menunggu)
-   - Deskripsi: Menghentikan pergerakan robot selama beberapa waktu.
-     [MODIFIKASI]: Jika langkah ini merupakan hasil turunan dari "apakah ditaruh?" 
-     yang tidak menemukan warna kubus cocok, delay akan otomatis diisi 0.1s 
-     dengan keterangan "Dilewati".
-   - Nama Gerakan: Harus mengandung kata "delay".
+   - Deskripsi: Menghentikan pergerakan robot selama durasi waktu tertentu.
+   - Contoh Input:
+     * Nama       : delay
+     * Vx         : 0.0
+     * Vy         : 0.0
+     * Vw         : 0.0
+     * Limit Type : Waktu (s)
+     * Limit Val  : 3.0
+     * Keterangan : Jeda Persiapan
+   - Apa Yang Terjadi: 
+     Robot berhenti total (kecepatan 0) selama 3.0 detik sebelum melanjutkan ke langkah berikutnya.
 
 5. Find Coordinate (Navigasi A-Star / Autopilot)
-   - Deskripsi: Menginstruksikan robot untuk secara otomatis mencari rute jalan 
-     dan menghindari tembok menuju titik koordinat X (Vx) dan Y (Vy), sambil 
-     menyesuaikan putaran (Vw).
-   - Nama Gerakan: Harus mengandung kata "find coordinate" atau "navigasi".
+   - Deskripsi: Navigasi pintar otomatis menghindari rintangan/tembok menuju target.
+   - Contoh Input:
+     * Nama       : find coordinate
+     * Vx         : -660.0
+     * Vy         : -100.0
+     * Vw         : 180.0
+     * Limit Type : Navigasi A*
+     * Limit Val  : 0.0
+     * Keterangan : Menuju Stand P1
+   - Apa Yang Terjadi: 
+     Algoritma A* menghitung rute jalan bebas rintangan. Robot berjalan sendiri 
+     menuju X=-660, Y=-100 dan berputar hingga sudut 180° menghadap stand.
 
 6. Reset Coordinate / Reset Odometry
-   - Deskripsi: Mengatur ulang origin kalkulasi jarak di dalam game (0 cm).
-   - Nama Gerakan: "reset coordinate" atau "reset odometry".
+   - Deskripsi: Mengatur ulang titik acuan (origin 0 cm) kalkulasi odometry robot.
+   - Contoh Input:
+     * Nama       : reset coordinate
+     * Vx=0, Vy=0, Vw=0, Limit Type=Reset Odom, Limit Val=0
+   - Apa Yang Terjadi: 
+     Posisi robot saat ini dijadikan titik acuan (0,0) baru untuk perhitungan Odometry.
 
 7. Balance (Penyesuaian Sensor ke Tembok/Garis)
-   - Deskripsi: Menyetarakan jarak dan sudut robot terhadap dinding sejauh 5cm 
-     agar robot berada dalam posisi tegak lurus sempurna.
-   - Nama Gerakan: "balance depan", "balance kiri", "balance depan kiri".
+   - Deskripsi: Menyetarakan jarak dan sudut robot terhadap dinding sejauh ~5cm.
+   - Contoh Input:
+     * Nama       : balance depan kiri
+     * Vx=0, Vy=0, Vw=0, Limit Type=Waktu (s), Limit Val=2.0
+   - Apa Yang Terjadi: 
+     Sensor jarak depan dan kiri aktif membaca tembok. Robot menyesuaikan posisi 
+     dan kemiringan badan secara otomatis agar jarak ke dinding depan & kiri tepat ~5cm 
+     serta tegak lurus sempurna.
 
 8. Ambil Kubus (Grab Sequence)
-   - Deskripsi: Robot secara otomatis mendekati stand kosong/berisi di depannya, 
-     menjulurkan gripper, mengambil kubus, dan menyimpannya ke slot storage carousel.
-   - Nama Gerakan: "ambil kubus", "grab".
+   - Deskripsi: Mengambil kubus dari stand dan menyimpannya di storage carousel.
+   - Contoh Input:
+     * Nama       : ambil kubus
+     * Vx=0, Vy=0, Vw=0, Limit Type=Waktu (s), Limit Val=2.0
+     * Keterangan : P1 S1
+   - Apa Yang Terjadi: 
+     Robot menghentikan roda, menjulurkan mekanisme gripper ke stand P1 S1, 
+     menyedot/menjepit kubus, menarik arm kembali, memutar carousel storage, 
+     dan menyimpan kubus di slot kosong.
 
 9. Taruh Kubus (Drop Sequence)
-   - [MODIFIKASI & DIPERBARUI]:
-     * Robot akan membaca seluruh 8 slot isi storage 1 per 1 dan mencocokkannya 
-       dengan warna target yang diminta di Keterangan / target memory.
-     * Rak Carousel storage diputar otomatis hingga slot yang berisi kubus cocok 
-       berada di posisi depan.
-     * Gripper meletakkan kubus secara presisi pada posisi pusat Stand / Rak Almari (`ALMARI_V`).
-     * GUI Controller mengunci penungguan hingga animasi drop SELESAI di simulator 
-       sebelum melepaskan sekuens ke langkah berikutnya.
-   - Nama Gerakan: "taruh kubus", "drop".
+   - Deskripsi: Meletakkan kubus dari storage ke Rak Almari.
+   - Contoh Input:
+     * Nama       : taruh kubus
+     * Vx=0, Vy=0, Vw=0, Limit Type=Taruh Kubus
+     * Limit Val  : 2.0  (Default slot storage 2)
+     * Keterangan : A1 S3 (RED di S2)
+   - Apa Yang Terjadi: 
+     Carousel memutar slot S2 (yang berisi kubus MERAH) ke posisi depan, arm gripper 
+     mendorong kubus keluar dan meletakkannya presisi di Rak Almari A1 S3, 
+     lalu menarik arm kembali.
 
 ------------------------------------------------------------------------------
-B. FITUR BARU & LOGIKA LOGIKA PINTAR (NEW FEATURES)
+D. CONTOH LOGIKA PINTAR (SMART LOGIC & DECISION MAKING)
 ------------------------------------------------------------------------------
 
 1. apakah ditaruh? (Cek Warna Storage & Taruh Otomatis)
-   - [FITUR BARU]:
-     * Memeriksa slot target di Almari (misal `A1 S3`, `A1 S2`, `A1 S1`) atau nama warna (`RED`, `GREEN`, `BLUE`).
-     * Membaca seluruh isi 8 slot storage robot 1 per 1.
-     * Jika kubus warna yang cocok ditemukan di storage (misal RED ada di Slot S2), 
-       langkah `taruh kubus` selanjutnya otomatis diubah nilainya ke slot S2 (`2.0`) 
-       dan robot menaruhnya ke Almari.
-     * Jika target slot Almari bernilai `EMPTY` (tidak butuh kubus) atau warna yang 
-       dicari tidak ada di storage, langkah `taruh kubus` otomatis di-skip (diganti `delay 0.1s`).
+   - Contoh Input:
+     * Nama       : apakah ditaruh?
+     * Limit Type : Cek Taruh
+     * Keterangan : A1 S3
+   - Apa Yang Terjadi:
+     * Program membaca target warna di Almari A1 S3 (misal butuh MERAH).
+     * Program memeriksa 8 slot storage robot. 
+     * JIKA KUBUS MERAH ADA di Storage (misal Slot S2): Langkah "taruh kubus" di bawahnya 
+       otomatis diisi slot S2 (limit_val: 2.0) dan robot menaruh kubus MERAH ke Almari A1 S3.
+     * JIKA KUBUS MERAH TIDAK ADA / Target Almari Kosong: Langkah "taruh kubus" di bawahnya 
+       otomatis diubah menjadi "delay 0.1s" dengan keterangan "Dilewati (Tidak Ada Kubus RED di Storage)".
 
 2. apakah full? / full? (Cek Storage Penuh & Lompat Urutan)
-   - [FITUR BARU]:
-     * Memeriksa apakah kapasitas storage robot telah penuh (8 kubus).
-     * Membandingkan secara otomatis jumlah warna kubus di storage dengan total 
-       kebutuhan warna pada Target Almari.
-     * Jika Storage Penuh ATAU Target Terpenuhi: Sekuens otomatis melompat (*jump*) 
-       ke Urutan Kombinasi #4 ("taruh ke almari" / urutan yang ditentukan di Keterangan).
-     * Jika Belum Penuh: Sekuens berlanjut ke langkah berikutnya tanpa melompat.
+   - Contoh Input:
+     * Nama       : apakah full?
+     * Limit Type : Cek Full/Target
+     * Keterangan : 4  (artinya Lompat ke Urutan Kombinasi #4 "Taruh ke Almari")
+   - Apa Yang Terjadi:
+     * JIKA STORAGE PENUH (8 kubus) ATAU Target Warna Almari sudah lengkap di storage:
+       Sekuens LANGSUNG MELOMPAT (jump) mengeksekusi Urutan Kombinasi #4 
+       dan melewati (skip) semua langkah di bawahnya.
+     * JIKA BELUM PENUH: Sekuens berlanjut normal ke langkah di bawahnya.
 
-3. Scanning Stand Ultra-Narrow Crop (Visi 36px)
-   - [FITUR BARU]:
-     * Pemotongan frame kamera vision dipersempit menjadi 36px x 90px persis pada 1 garis stand.
-     * Memastikan 100% tidak ada kebocoran warna dari kubus di stand tetangga.
+3. apakah diambil? (Cek Kebutuhan Target & Ambil Otomatis)
+   - Contoh Input:
+     * Nama       : apakah diambil?
+     * Limit Type : Cek Ambil
+     * Keterangan : P1 S1
+   - Apa Yang Terjadi:
+     * Program membaca warna kubus di stand P1 S1 dari memori scan vision.
+     * JIKA WARNA DIBUTUHKAN Almari & Storage belum penuh: Langkah berikutnya 
+       otomatis diubah menjadi "ambil kubus".
+     * JIKA TIDAK DIBUTUHKAN / Storage Penuh: Langkah berikutnya otomatis 
+       diubah menjadi "delay 0.1s" (dilewati).
 
-4. Modul Terpisah Vision & Navigasi
-   - [FITUR BARU]:
-     * `simulator/vision.py`: Pemrosesan OpenCV HSV & scanning warna.
-     * `simulator/navigation.py`: Pathfinding A* & Pure Pursuit.
+4. Scan Stand / Scan Almari / Scan Target
+   - Contoh Input:
+     * Nama       : scan stand
+     * Limit Type : Scan Stand
+     * Keterangan : P1
+   - Apa Yang Terjadi:
+     * Robot berhenti (VEL 0 0 0), jendela kamera vision aktif memotong frame 
+       ultra-narrow (36px), melakukan scanning warna HSV kubus pada Stand P1, 
+       menyimpan hasil ke tabel memori real-time, lalu menutup jendela kamera.
 
 ------------------------------------------------------------------------------
-C. TIPE LIMIT (BATAS KONDISI)
+E. FITUR GUI CONTROLLER & PENGELOLAAN SEKUENS
 ------------------------------------------------------------------------------
 
-1. Waktu (s)   : Menjalankan perintah selama X detik.
-2. Jarak (px)  : Menjalankan perintah sejauh X pixel.
-3. Sudut (°)   : Berputar hingga target X derajat tercapai.
-4. Sensor Garis: Berjalan hingga Sensor Garis mendeteksi garis putih.
+1. Tombol Copy (Salin Kombinasi & Gerakan):
+   - Klik tombol "Copy" pada Urutan Kombinasi (Level 1), Antrean Kombinasi (Level 2), 
+     atau Detail Gerakan (Level 3) untuk menduplikasi item terpilih secara langsung.
 
-------------------------------------------------------------------------------
-D. FITUR GUI CONTROLLER & PENGELOLAAN SEKUENS
-------------------------------------------------------------------------------
-
-1. Tombol Copy (Salin Kombinasi & Gerakan)
-   - [FITUR BARU]: Tombol "Copy" tersedia di Level 1 (Urutan Kombinasi), 
-     Level 2 (Antrean Kombinasi), dan Level 3 (Detail Gerakan) untuk menduplikasi 
-     item dengan satu kali klik.
-
-2. Stand & Target Memory Real-Time
-   - Menampilkan visualisasi tabel memori hasil scanning Ruangan P (P1-P3), 
+2. Stand & Target Memory Real-Time:
+   - Visualisasi tabel memori real-time hasil scanning Ruangan P (P1-P3), 
      Gudang A (A1-A2), dan Target Almari.
 
-3. Mulai dari Pilihan (Start From)
-   - Menjalankan sekuens dari tahapan tertentu yang disorot user.
+3. Mulai dari Pilihan (Start From):
+   - Klik kanan / pilih langkah pada tabel sekuens lalu klik "Start From" 
+     untuk mengeksekusi robot mulai dari posisi/langkah tersebut.
 
-4. Reset Robot & Reset Storage
-   - Reset posisi robot ke HOME (0,0) atau Reset paksa isi 8 slot storage carousel.
+4. Reset Robot & Reset Storage:
+   - Tombol pintas untuk me-reset posisi robot ke HOME (0,0) atau 
+     mengosongkan isi 8 slot storage carousel secara paksa.
 
-5. Telemetri Real-Time
-   - Menampilkan posisi X/Y, heading sudut, jarak tempuh, sensor garis, dan 8 slot storage.
+5. Telemetri Real-Time:
+   - Umpan balik langsung koordinat X/Y, sudut heading, jarak tempuh, 
+     status sensor garis, dan visualisasi 8 slot storage.
